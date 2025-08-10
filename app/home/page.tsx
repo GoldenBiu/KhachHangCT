@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { User, FileText, Receipt, MessageCircle, LogOut, Home, Mail, Phone, Sun, Moon, Calendar, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { User, FileText, Receipt, MessageCircle, LogOut, Home, Mail, Phone, Sun, Moon, Calendar, CheckCircle2, Clock, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
@@ -528,6 +528,16 @@ function ConsumptionChart() {
     tong: r.TongTien || 0,
   })).reverse()
   const estimate = data.length ? Math.round(data[data.length - 1].tong * 1.02) : 0
+  // Month-over-month percentage changes for consumption
+  const prev = data.length >= 2 ? data[data.length - 2] : null
+  const curr = data.length >= 1 ? data[data.length - 1] : null
+  const pct = (prevVal: number, currVal: number) => {
+    if (prevVal > 0) return ((currVal - prevVal) / prevVal) * 100
+    if (prevVal === 0 && currVal > 0) return 100
+    return 0
+  }
+  const dienPct = prev && curr ? pct(prev.dien || 0, curr.dien || 0) : 0
+  const nuocPct = prev && curr ? pct(prev.nuoc || 0, curr.nuoc || 0) : 0
   const config = {
     dien: { label: 'Điện', color: 'oklch(65% 0.2 260)' },
     nuoc: { label: 'Nước', color: 'oklch(70% 0.12 200)' },
@@ -549,6 +559,19 @@ function ConsumptionChart() {
         </BarChart>
       </ChartContainer>
       <p className="text-xs text-gray-600 dark:text-gray-300">Ước tính hóa đơn tháng này: <span className="font-semibold">{estimate.toLocaleString('vi-VN')} VND</span> (tăng 2% so với trung bình gần đây)</p>
+      <p className="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-3">
+        <span className="flex items-center gap-1">
+          {dienPct >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-red-500" /> : <TrendingDown className="h-3.5 w-3.5 text-emerald-500" />}
+          Điện:
+          <span className={`font-semibold ${dienPct >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{dienPct >= 0 ? '+' : ''}{Math.abs(dienPct).toFixed(1)}%</span>
+        </span>
+        <span className="opacity-60">•</span>
+        <span className="flex items-center gap-1">
+          {nuocPct >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-red-500" /> : <TrendingDown className="h-3.5 w-3.5 text-emerald-500" />}
+          Nước:
+          <span className={`font-semibold ${nuocPct >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{nuocPct >= 0 ? '+' : ''}{Math.abs(nuocPct).toFixed(1)}%</span>
+        </span>
+      </p>
     </div>
   )
 }

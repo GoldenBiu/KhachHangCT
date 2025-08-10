@@ -1,14 +1,43 @@
 "use client"
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Receipt, ArrowLeft, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { useLichSuThanhToan } from '@/hooks/use-lichsu-thanh-toan'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function PaymentHistoryPage() {
   const router = useRouter()
   const { records, summary, loading, error, refresh } = useLichSuThanhToan()
+  const [actionColor, setActionColor] = useState<string>('blue')
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('payActionColor') : null
+    if (saved) setActionColor(saved)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('payActionColor', actionColor)
+  }, [actionColor])
+
+  const solidClassesByColor: Record<string, string> = {
+    blue: 'bg-blue-600 hover:bg-blue-700',
+    green: 'bg-green-600 hover:bg-green-700',
+    violet: 'bg-violet-600 hover:bg-violet-700',
+    amber: 'bg-amber-600 hover:bg-amber-700',
+    rose: 'bg-rose-600 hover:bg-rose-700',
+    cyan: 'bg-cyan-600 hover:bg-cyan-700',
+  }
+  const outlineClassesByColor: Record<string, string> = {
+    blue: 'border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20',
+    green: 'border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20',
+    violet: 'border-violet-600 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/20',
+    amber: 'border-amber-600 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20',
+    rose: 'border-rose-600 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20',
+    cyan: 'border-cyan-600 text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/20',
+  }
 
   if (loading) {
     return (
@@ -47,13 +76,13 @@ export default function PaymentHistoryPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card className="border-0 shadow-lg">
             <CardContent className="p-4">
-              <p className="text-sm text-gray-600 dark:text-gray-300">Số lần thanh toán</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Số lần thanh toán đủ</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary.soLanThanhToan}</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-lg">
             <CardContent className="p-4">
-              <p className="text-sm text-gray-600 dark:text-gray-300">Tổng đã thanh toán</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Tổng số tiền đã thanh toán</p>
               <p className="text-2xl font-bold text-emerald-600 break-words">{summary.tongDaThanhToan.toLocaleString('vi-VN')} VND</p>
               <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 italic">{
                 numberToVietnameseWords(summary.tongDaThanhToan)
@@ -62,13 +91,32 @@ export default function PaymentHistoryPage() {
           </Card>
           <Card className="border-0 shadow-lg">
             <CardContent className="p-4">
-              <p className="text-sm text-gray-600 dark:text-gray-300">Tổng nợ</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Tổng số tiền nợ</p>
               <p className="text-2xl font-bold text-red-600 break-words">{summary.tongNo.toLocaleString('vi-VN')} VND</p>
               <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 italic">{
                 numberToVietnameseWords(summary.tongNo)
               } đồng</p>
             </CardContent>
           </Card>
+          {/* Color picker */}
+          <div className="md:col-span-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-700 dark:text-gray-300">Màu nút hành động:</span>
+              <Select value={actionColor} onValueChange={setActionColor}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Chọn màu" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="blue">Xanh dương</SelectItem>
+                  <SelectItem value="green">Xanh lá</SelectItem>
+                  <SelectItem value="violet">Tím</SelectItem>
+                  <SelectItem value="amber">Hổ phách</SelectItem>
+                  <SelectItem value="rose">Hồng</SelectItem>
+                  <SelectItem value="cyan">Xanh ngọc</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         {/* Records list */}
@@ -81,14 +129,15 @@ export default function PaymentHistoryPage() {
               <div className="p-6 text-center text-gray-600 dark:text-gray-300">Chưa có lịch sử thanh toán</div>
             ) : (
               <div className="divide-y divide-gray-200 dark:divide-gray-800">
-                {records.map((r) => {
-                  const isPaid = r.TrangThaiThanhToan === 'Y'
+                {records.map((r, idx) => {
+                  const isPaid = r.TrangThaiThanhToan === 'Y' || r.TrangThaiThanhToan === '1' || r.TrangThaiThanhToan === 'Đã thanh toán' || r.TrangThaiThanhToan === 'paid' || r.TrangThaiThanhToan === 'PAID'
                   const tong = (r.TongTien ?? 0).toLocaleString('vi-VN')
                   const thang = r.ThangNam
-                  const dien = r.SoDienDaTieuThu ?? 0
-                  const nuoc = r.SoNuocDaTieuThu ?? 0
+                  const dien = (r.TienDien ?? r.SoDienDaTieuThu ?? 0).toLocaleString('vi-VN')
+                  const nuoc = (r.TienNuoc ?? r.SoNuocDaTieuThu ?? 0).toLocaleString('vi-VN')
+                  const itemKey = `${r.ThangNam || 'NA'}-${r.SoPhong || r.DayPhong || 'X'}-${r.ChiSoID ?? idx}`
                   return (
-                    <div key={r.ChiSoID} className="p-4 flex items-center justify-between">
+                    <div key={itemKey} className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isPaid ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>
                           {isPaid ? <CheckCircle2 className="h-5 w-5"/> : <Clock className="h-5 w-5"/>}
@@ -101,6 +150,24 @@ export default function PaymentHistoryPage() {
                       <div className="text-right">
                         <p className="font-semibold text-gray-900 dark:text-gray-100">{tong} VND</p>
                         <p className={`text-sm ${isPaid ? 'text-emerald-600' : 'text-yellow-600'}`}>{isPaid ? 'Đã thanh toán' : 'Chưa thanh toán'}</p>
+                        {isPaid ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`mt-2 border ${outlineClassesByColor[actionColor]}`}
+                            onClick={() => router.push(`/invoice?thang=${encodeURIComponent(thang)}&phong=${encodeURIComponent(r.SoPhong || '')}`)}
+                          >
+                            Xem chi tiết hóa đơn
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className={`mt-2 ${solidClassesByColor[actionColor]}`}
+                            onClick={() => router.push(`/invoice?thang=${encodeURIComponent(thang)}&phong=${encodeURIComponent(r.SoPhong || '')}`)}
+                          >
+                            Bấm để thanh toán
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )

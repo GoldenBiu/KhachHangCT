@@ -4,6 +4,7 @@ export interface LichSuThanhToanRecord {
   ChiSoID: number
   DayPhong?: string
   ThangNam: string
+  SoPhong?: string
   ChiSoDienCu?: number
   ChiSoNuocCu?: number
   ChiSoDienMoi?: number
@@ -14,12 +15,16 @@ export interface LichSuThanhToanRecord {
   GiaNuocMoi?: number
   TienPhong?: number
   TongDichVu?: number
+  DichVu?: number
   TongTien?: number
   TrangThaiThanhToan?: string
   Tientra?: number
+  TienTra?: number
   TienNo?: number
   SoDienDaTieuThu?: number
   SoNuocDaTieuThu?: number
+  TienDien?: number
+  TienNuoc?: number
   PhiSuaChua?: number
   PhiTru?: number
   TenPhiSuaChua?: string | null
@@ -58,33 +63,58 @@ export function useLichSuThanhToan() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://all-oqry.onrender.com/api/k_lichsuthanhtoan', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      let body: any = null
-      try {
-        body = await res.json()
-      } catch {
-        body = null
+      const tryFetch = async (url: string) => {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        let body: any = null
+        try {
+          body = await res.json()
+        } catch {
+          body = null
+        }
+        return { res, body }
       }
 
-      if (!res.ok) {
-        const msg = body?.message || `Không thể lấy lịch sử thanh toán (HTTP ${res.status})`
-        throw new Error(msg)
+      // Thử các endpoint tiềm năng (mới -> cũ)
+      const candidates = [
+        'https://all-oqry.onrender.com/api/k_lichsuthanhtoan/lich-su-khach-hang',
+        'https://all-oqry.onrender.com/api/k_lichsuthanhtoan/lich-su-thanh-toan',
+        'https://all-oqry.onrender.com/api/lich-su-thanh-toan',
+        'https://all-oqry.onrender.com/api/thanhtoan/lich-su',
+        'https://all-oqry.onrender.com/api/k_lichsuthanhtoan',
+      ]
+
+      let fetched: any[] | null = null
+      let lastErrMsg = 'Không thể lấy lịch sử thanh toán'
+      let shape: LichSuResponseShape | any = null
+      for (const url of candidates) {
+        const { res, body } = await tryFetch(url)
+        if (res.ok) {
+          shape = body || {}
+          fetched = Array.isArray(shape) ? shape : (shape.chi_so_list || shape.data || [])
+          break
+        }
+        lastErrMsg = (body && (body.message as string)) || `HTTP ${res.status}`
+        if (res.status !== 404) break
+      }
+
+      if (!fetched) {
+        throw new Error(lastErrMsg)
       }
 
       // Chuẩn hóa nhiều dạng trả về: có thể là danh sách trực tiếp hoặc object chứa chi_so_list
-      const shape = (body || {}) as LichSuResponseShape | any
-      const list: any[] = Array.isArray(shape) ? shape : (shape.chi_so_list || shape.data || [])
+      const list: any[] = fetched
 
       const normalized: LichSuThanhToanRecord[] = list.map((r: any) => ({
         ChiSoID: Number(r.ChiSoID ?? r.id ?? 0),
         DayPhong: r.DayPhong,
         ThangNam: r.ThangNam,
+        SoPhong: r.SoPhong,
         ChiSoDienCu: toVnd(r.ChiSoDienCu),
         ChiSoNuocCu: toVnd(r.ChiSoNuocCu),
         ChiSoDienMoi: toVnd(r.ChiSoDienMoi),
@@ -94,13 +124,17 @@ export function useLichSuThanhToan() {
         GiaNuocCu: toVnd(r.GiaNuocCu),
         GiaNuocMoi: toVnd(r.GiaNuocMoi),
         TienPhong: toVnd(r.TienPhong),
-        TongDichVu: toVnd(r.TongDichVu),
+        TongDichVu: toVnd(r.TongDichVu ?? r.DichVu),
+        DichVu: toVnd(r.DichVu),
         TongTien: toVnd(r.TongTien),
         TrangThaiThanhToan: r.TrangThaiThanhToan,
-        Tientra: toVnd(r.Tientra),
+        Tientra: toVnd(r.Tientra ?? r.TienTra),
+        TienTra: toVnd(r.TienTra),
         TienNo: toVnd(r.TienNo),
-        SoDienDaTieuThu: toVnd(r.SoDienDaTieuThu),
-        SoNuocDaTieuThu: toVnd(r.SoNuocDaTieuThu),
+        SoDienDaTieuThu: toVnd(r.SoDienDaTieuThu ?? r.TienDien),
+        SoNuocDaTieuThu: toVnd(r.SoNuocDaTieuThu ?? r.TienNuoc),
+        TienDien: toVnd(r.TienDien),
+        TienNuoc: toVnd(r.TienNuoc),
         PhiSuaChua: toVnd(r.PhiSuaChua),
         PhiTru: toVnd(r.PhiTru),
         TenPhiSuaChua: r.TenPhiSuaChua ?? null,
@@ -110,10 +144,37 @@ export function useLichSuThanhToan() {
 
       setRecords(normalized)
 
-      const soLan = toVnd(shape.so_lan_thanh_toan) ?? normalized.filter(r => r.TrangThaiThanhToan === 'Y').length
-      // Bám đúng logic backend mẫu: tổng nợ = sum(TienNo), tổng đã thanh toán = sum(Tientra)
-      const tongNo = toVnd(shape.tong_no) ?? normalized.reduce((sum, r) => sum + (r.TienNo ?? 0), 0)
-      const tongDaTT = toVnd(shape.tong_da_thanh_toan) ?? normalized.reduce((s, r) => s + (r.Tientra ?? 0), 0)
+      const soLan = toVnd(shape?.so_lan_thanh_toan) ?? normalized.filter(r => isPaidStatus(r.TrangThaiThanhToan)).length
+
+      // Gọi thêm các API tổng hợp nếu có (tong-no, tong-da-thanh-toan)
+      let tongNoFromApi: number | undefined
+      let tongDaTTFromApi: number | undefined
+      try {
+        const [noRes, daTTRes] = await Promise.all([
+          tryFetch('https://all-oqry.onrender.com/api/k_lichsuthanhtoan/tong-no'),
+          tryFetch('https://all-oqry.onrender.com/api/k_lichsuthanhtoan/tong-da-thanh-toan'),
+        ])
+        if (noRes.res.ok) {
+          const v = (noRes.body?.tongNo ?? noRes.body?.tong_no)
+          const n = toVnd(v)
+          if (typeof n === 'number') tongNoFromApi = n
+        }
+        if (daTTRes.res.ok) {
+          const v = (daTTRes.body?.tongDaThanhToan ?? daTTRes.body?.tong_da_thanh_toan)
+          const n = toVnd(v)
+          if (typeof n === 'number') tongDaTTFromApi = n
+        }
+      } catch {
+        // ignore summary API failures; fallback below
+      }
+
+      // Fallback tính toán từ danh sách nếu API tổng hợp không có
+      const tongNo = (typeof tongNoFromApi === 'number'
+        ? tongNoFromApi
+        : (toVnd(shape?.tong_no) ?? normalized.reduce((sum, r) => sum + (r.TienNo ?? 0), 0)))
+      const tongDaTT = (typeof tongDaTTFromApi === 'number'
+        ? tongDaTTFromApi
+        : (toVnd(shape?.tong_da_thanh_toan) ?? normalized.reduce((s, r) => s + (r.Tientra ?? r.TienTra ?? 0), 0)))
       const tongTongTien = normalized.reduce((s, r) => s + (r.TongTien ?? 0), 0)
       setSummary({ soLanThanhToan: soLan, tongNo, tongDaThanhToan: tongDaTT, tongTongTien })
     } catch (err) {
@@ -150,6 +211,6 @@ function toVnd(v: any): number | undefined {
 }
 
 function isPaidStatus(v: any): boolean {
-  return v === 'Y' || v === '1' || v === 1 || v === true || v === 'true'
+  return v === 'Y' || v === '1' || v === 1 || v === true || v === 'true' || v === 'Đã thanh toán' || v === 'paid' || v === 'PAID'
 }
 
