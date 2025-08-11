@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { useCurrentKhachHang } from '@/hooks/use-khachhang'
 import { useHoaDon, useChiTietHoaDon } from '@/hooks/use-hoadon'
+import { isPaidStatus } from '@/hooks/use-lichsu-thanh-toan'
 import { useLichSuThanhToan, isPaidRecord, toVnd } from '@/hooks/use-lichsu-thanh-toan'
 import { toVietnameseNumberText } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
@@ -160,16 +161,8 @@ export default function InvoicePage() {
                   .filter(i => filterRoom ? String(i.SoPhong||'').includes(filterRoom) : true)
                   .map((invoice) => {
                   const isPaid = (
-                    invoice.TrangThaiThanhToan === 'Y' ||
-                    invoice.TrangThaiThanhToan === '1' ||
-                    (invoice as any).TrangThaiThanhToan === 1 ||
-                    (invoice as any).TrangThaiThanhToan === true ||
-                    (invoice as any).TrangThaiThanhToan === 'true' ||
-                    (invoice as any).TrangThaiThanhToan === 'Đã thanh toán' ||
-                    (invoice as any).TrangThaiThanhToan === 'paid' ||
-                    (invoice as any).TrangThaiThanhToan === 'PAID' ||
-                    // additional rule: paid amount >= total
-                    (toNum((invoice as any).TienTra ?? (invoice as any).Tientra) >= toNum((invoice as any).TongTien))
+                    isPaidStatus((invoice as any).TrangThaiThanhToan) ||
+                    toNum((invoice as any).TienTra ?? (invoice as any).Tientra) >= toNum((invoice as any).TongTien)
                   )
                   const dien = toNum(invoice.SoDienDaTieuThu) * toNum(invoice.GiaDienMoi)
                   const nuoc = toNum(invoice.SoNuocDaTieuThu) * toNum(invoice.GiaNuocMoi)

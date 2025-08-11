@@ -114,12 +114,15 @@ export default function HomePage() {
     if (saved) setAvatarUrl(saved)
   }, [userInfo?.TenDangNhap])
 
-  // Sync KhachHangID from khachHang data when available
+  // Sync KhachHangID from khachHang data when available (avoid render loop)
   useEffect(() => {
-    if (khachHang?.KhachHangID && userInfo) {
-      setUserInfo(prev => prev ? { ...prev, KhachHangID: khachHang.KhachHangID } : prev)
-    }
-  }, [khachHang?.KhachHangID, userInfo])
+    if (!khachHang?.KhachHangID) return
+    setUserInfo(prev => {
+      if (!prev) return prev
+      if (prev.KhachHangID === khachHang.KhachHangID) return prev
+      return { ...prev, KhachHangID: khachHang.KhachHangID }
+    })
+  }, [khachHang?.KhachHangID])
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click()

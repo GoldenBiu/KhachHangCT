@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Phone, Mail, MapPin, MessageCircle, QrCode, Send, Info } from 'lucide-react'
+import { Phone, Mail, MapPin, MessageCircle, QrCode, Send, Info, Bell, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import Image from 'next/image'
 import zaloQr from '@/app/images/MãQR.jpg'
 import {
@@ -20,10 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCurrentKhachHang } from '@/hooks/use-khachhang'
+import { useLienHePhanHoi } from '@/hooks/use-lienhe-phanhoi'
 
 export default function ContactPage() {
   const router = useRouter()
   const { khachHang } = useCurrentKhachHang()
+  const { items, loading, error, newCount, refresh } = useLienHePhanHoi(45000)
   const [formData, setFormData] = useState({
     reason: '',
     content: '',
@@ -157,6 +159,62 @@ export default function ContactPage() {
                 )
               })}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Notifications / Manager Responses */}
+        <Card className="mb-6 border-0 shadow-lg">
+          <CardHeader className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-t-lg">
+            <CardTitle className="flex items-center">
+              <Bell className="h-5 w-5 mr-2" />
+              Thông báo & Phản hồi từ quản lý {newCount > 0 ? `(mới: ${newCount})` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="p-6 text-gray-600">Đang tải phản hồi...</div>
+            ) : error ? (
+              <div className="p-6 text-center">
+                <AlertCircle className="h-6 w-6 mx-auto mb-2 text-red-600" />
+                <p className="text-red-600 mb-3">{error}</p>
+                <Button onClick={refresh}>Thử lại</Button>
+              </div>
+            ) : (items && items.length > 0 ? (
+              <div className="divide-y divide-gray-200">
+                {items.map((it) => {
+                  const isDone = it.TrangThai === 'HoanThanh'
+                  const isProcessing = it.TrangThai === 'DangXuLy'
+                  const Icon = isDone ? CheckCircle2 : (isProcessing ? Clock : AlertCircle)
+                  return (
+                    <div key={it.LienHeID} className="p-4 flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDone ? 'bg-emerald-100 text-emerald-700' : isProcessing ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-gray-900">{it.LyDoLienHe || 'Liên hệ'}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">#{it.LienHeID}</span>
+                          <span className="text-xs text-gray-500">{new Date(it.Time).toLocaleString('vi-VN')}</span>
+                        </div>
+                        <p className="text-sm text-gray-700 mt-1">{it.NoiDung}</p>
+                        {it.PhanHoi && (
+                          <div className="mt-2 p-3 rounded-md bg-indigo-50">
+                            <p className="text-xs text-indigo-700">Phản hồi quản lý:</p>
+                            <p className="text-sm font-medium text-indigo-900">{it.PhanHoi}</p>
+                            {it.ThoiGianPhanHoi && (
+                              <p className="text-xs text-indigo-700 mt-1">Lúc: {new Date(it.ThoiGianPhanHoi).toLocaleString('vi-VN')}</p>
+                            )}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-600 mt-2">Trạng thái: <span className={`${isDone ? 'text-emerald-600' : isProcessing ? 'text-amber-600' : 'text-gray-700'} font-semibold`}>{it.TrangThaiHienThi}</span></p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="p-6 text-gray-600">Chưa có phản hồi nào</div>
+            ))}
           </CardContent>
         </Card>
 
