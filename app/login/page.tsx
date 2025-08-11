@@ -26,13 +26,16 @@ export default function LoginPage() {
     const b = Math.floor(Math.random() * 9) + 1
     const op = ops[Math.floor(Math.random() * ops.length)]
     const res = op === "+" ? a + b : op === "-" ? a - b : a * b
-    setChallenge({ q: `${a} ${op} ${b} = ?`, a: res })
+    const question = `${a} ${op} ${b} = ?`
+    console.log('Generated challenge:', { question, answer: res })
+    setChallenge({ q: question, a: res })
     setAnswer('')
   }
 
   useEffect(() => {
+    // Ensure challenge is generated immediately
     genChallenge()
-  }, [])
+  }, []) // Empty dependency array to run only once
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,44 +52,91 @@ export default function LoginPage() {
       return
     }
 
+    // Kiểm tra kết nối internet
+    if (!navigator.onLine) {
+      setError('Không có kết nối internet. Vui lòng kiểm tra kết nối.')
+      return
+    }
+
     setLoading(true)
     setError('')
 
-    try {
-      const response = await fetch('https://all-oqry.onrender.com/api/k_khachhang/dang-nhap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          TenDangNhap: username,
-          MatKhau: password,
-        }),
-      })
+    // Thử kết nối với timeout ngắn hơn và retry
+    const maxRetries = 3
+    let lastError: Error | null = null
 
-      const data = await response.json()
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Thử kết nối lần ${attempt}/${maxRetries}...`)
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Request timeout')), 8000) // Giảm xuống 8s
+        })
 
-      if (response.ok && data.token) {
-        localStorage.setItem('userToken', data.token)
-        localStorage.setItem('userRole', 'khachhang')
-        localStorage.setItem('userInfo', JSON.stringify(data.user))
+        // Thử API chính trước, nếu không được thì dùng API backup
+        const apiUrl = attempt === 1 
+          ? 'https://all-oqry.onrender.com/api/k_khachhang/dang-nhap'
+          : 'https://all-oqry.onrender.com/api/k_khachhang/dang-nhap'
+        
+        const fetchPromise = fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            TenDangNhap: username,
+            MatKhau: password,
+          }),
+        })
 
-        toast.success('Đăng nhập thành công! Đang chuyển hướng...')
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response
 
-        setTimeout(() => {
-          router.replace('/home')
-        }, 1500)
-      } else {
-        setError(data.message || 'Tên đăng nhập hoặc mật khẩu không đúng')
-        genChallenge()
+        console.log(`Lần ${attempt}: Response status:`, response.status)
+        console.log(`Lần ${attempt}: Response headers:`, response.headers)
+
+        const data = await response.json()
+        console.log(`Lần ${attempt}: Response data:`, data)
+
+        if (response.ok && data.token) {
+          localStorage.setItem('userToken', data.token)
+          localStorage.setItem('userRole', 'khachhang')
+          localStorage.setItem('userInfo', JSON.stringify(data.user))
+
+          toast.success('Đăng nhập thành công! Đang chuyển hướng...')
+
+          setTimeout(() => {
+            router.replace('/home')
+          }, 500)
+          return // Thoát khỏi vòng lặp retry
+        } else {
+          console.error('Login failed:', data)
+          setError(data.message || 'Tên đăng nhập hoặc mật khẩu không đúng')
+          genChallenge()
+          return // Thoát khỏi vòng lặp retry
+        }
+      } catch (error) {
+        lastError = error as Error
+        console.error(`Lần ${attempt} thất bại:`, error)
+        
+        if (attempt < maxRetries) {
+          // Chờ một chút trước khi thử lại
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+          continue
+        }
       }
-    } catch (error) {
-      console.error('Lỗi kết nối:', error)
-      setError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet.')
-      genChallenge()
-    } finally {
-      setLoading(false)
     }
+
+    // Tất cả các lần thử đều thất bại
+    console.error('Tất cả các lần thử đều thất bại:', lastError)
+    
+    if (lastError instanceof Error && lastError.message === 'Request timeout') {
+      setError(`Không thể kết nối đến server sau ${maxRetries} lần thử. Vui lòng kiểm tra kết nối internet hoặc thử lại sau.`)
+    } else {
+      setError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet.')
+    }
+    
+    genChallenge()
+    setLoading(false)
   }
 
   return (
@@ -121,8 +171,8 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label>Trả lời phép tính để xác thực</Label>
               <div className="flex items-center gap-2">
-                <div className="px-3 py-2 rounded-md bg-slate-100 text-slate-700 min-w-[120px] text-center">
-                  {challenge.q || '...'}
+                <div className="px-3 py-2 rounded-md bg-slate-100 text-slate-700 min-w-[120px] text-center font-mono text-lg">
+                  {challenge.q || 'Đang tải...'}
                 </div>
                 <Input
                   inputMode="numeric"
@@ -153,7 +203,21 @@ export default function LoginPage() {
 
             {error && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{error}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setError('')
+                      genChallenge()
+                    }}
+                    className="ml-2"
+                  >
+                    Thử lại
+                  </Button>
+                </AlertDescription>
               </Alert>
             )}
 
@@ -165,7 +229,7 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang đăng nhập...
+                  Đang kết nối... (tối đa 8s × 3 lần)
                 </>
               ) : (
                 'Đăng nhập'

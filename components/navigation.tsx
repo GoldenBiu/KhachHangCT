@@ -8,6 +8,13 @@ export default function Navigation() {
   const router = useRouter()
   const pathname = usePathname()
 
+  // Don't show navigation on login, forgot-password, or other auth pages
+  const isAuthPage = ['/login', '/forgot-password', '/register'].includes(pathname)
+  
+  if (isAuthPage) {
+    return null
+  }
+
   const navItems = [
     { href: '/home', icon: Home, label: 'Trang chủ' },
     { href: '/profile', icon: User, label: 'Hồ sơ' },

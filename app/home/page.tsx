@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { User, FileText, Receipt, MessageCircle, LogOut, Home, Mail, Phone, Sun, Moon, Calendar, CheckCircle2, Clock, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react'
+import { User, FileText, Receipt, MessageCircle, LogOut, Home, Mail, Phone, Sun, Moon, Calendar, CheckCircle2, Clock, AlertCircle, TrendingUp, TrendingDown, Cloud, Thermometer, Droplets, Wind, Gauge } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,8 @@ import { useCurrentKhachHang } from '@/hooks/use-khachhang'
 import { useHoaDon } from '@/hooks/use-hoadon'
 import { useLichSuThanhToan, isPaidStatus, isPaidRecord } from '@/hooks/use-lichsu-thanh-toan'
 import { useHopDong } from '@/hooks/use-hopdong'
+import ThemeSelector from '@/components/theme-selector'
+import { useTheme } from '@/hooks/use-theme'
 
 interface UserInfo {
   HoTen?: string
@@ -32,21 +34,34 @@ interface UserInfo {
   KhachHangID?: string | number
 }
 
+interface WeatherData {
+  dia_diem: string
+  thoi_tiet: string
+  nhiet_do: string
+  do_am: string
+  toc_do_gio: string
+  ap_suat: string
+  bieu_tuong: string
+}
+
 export default function HomePage() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [largeText, setLargeText] = useState(false)
   const [highContrast, setHighContrast] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardStep, setOnboardStep] = useState(0)
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(true)
+  const [weatherError, setWeatherError] = useState<string | null>(null)
   const { khachHang } = useCurrentKhachHang()
   const { hoaDon } = useHoaDon()
   const { hopDong } = useHopDong()
   const { records: payRecords, summary: paySummary, loading: payLoading, error: payError, refresh: refreshPay } = useLichSuThanhToan()
+  const { currentTheme, changeTheme, getThemeClasses } = useTheme()
 
   useEffect(() => {
     const token = localStorage.getItem('userToken')
@@ -64,20 +79,7 @@ export default function HomePage() {
   // Sync theme with html class for next-themes minimal usage
   useEffect(() => {
     setMounted(true)
-    const html = document.documentElement
-    const stored = localStorage.getItem('theme') as 'light' | 'dark' | null
-    const initial = stored || 'light'
-    setTheme(initial)
-    html.classList.toggle('dark', initial === 'dark')
   }, [])
-
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light'
-    setTheme(next)
-    const html = document.documentElement
-    html.classList.toggle('dark', next === 'dark')
-    localStorage.setItem('theme', next)
-  }
 
   // Onboarding minimal (3 steps, first visit)
   useEffect(() => {
@@ -183,6 +185,138 @@ export default function HomePage() {
     }
   ]
 
+  // Fetch weather data
+  const fetchWeather = async () => {
+    try {
+      setWeatherLoading(true)
+      setWeatherError(null)
+      const response = await fetch('https://all-oqry.onrender.com/api/thoitiet/can-tho')
+      if (!response.ok) {
+        throw new Error('Không thể lấy dữ liệu thời tiết')
+      }
+      const data = await response.json()
+      setWeatherData(data)
+    } catch (error) {
+      console.error('Lỗi thời tiết:', error)
+      setWeatherError('Không thể tải thông tin thời tiết')
+    } finally {
+      setWeatherLoading(false)
+    }
+  }
+
+  // Generate weather-based suggestions
+  const getWeatherSuggestions = useCallback((weatherData: WeatherData) => {
+    const suggestions: string[] = []
+    const temp = parseFloat(weatherData.nhiet_do.replace('°C', ''))
+    const humidity = parseInt(weatherData.do_am.replace('%', ''))
+    const windSpeed = parseFloat(weatherData.toc_do_gio.replace(' m/s', ''))
+    const weatherDesc = weatherData.thoi_tiet.toLowerCase()
+    
+    // Temperature-based suggestions
+    if (temp < 18) {
+      suggestions.push('🌡️ Trời lạnh, nhớ mặc ấm và uống trà nóng nhé!')
+    } else if (temp < 22) {
+      suggestions.push('🧥 Trời mát, nên mặc áo khoác nhẹ!')
+    } else if (temp >= 22 && temp <= 28) {
+      suggestions.push('☀️ Thời tiết dễ chịu, thích hợp để ra ngoài và hoạt động!')
+    } else if (temp > 28 && temp <= 32) {
+      suggestions.push('🌤️ Trời ấm, thích hợp để đi dạo buổi chiều!')
+    } else if (temp > 32) {
+      suggestions.push('🔥 Trời nóng, hãy uống nhiều nước và tránh ra ngoài giữa trưa!')
+    }
+    
+    // Weather condition-based suggestions
+    if (weatherDesc.includes('mưa') || weatherDesc.includes('drizzle') || weatherDesc.includes('rain') || weatherDesc.includes('shower')) {
+      suggestions.push('☔ Trời đang mưa, nhớ mang theo ô và áo mưa nhé!')
+      suggestions.push('🚗 Đường trơn trượt, lái xe cẩn thận!')
+      suggestions.push('🏠 Nên ở trong nhà hoặc tìm nơi trú mưa!')
+    } else if (weatherDesc.includes('nắng') || weatherDesc.includes('clear') || weatherDesc.includes('sunny') || weatherDesc.includes('fair')) {
+      suggestions.push('🕶️ Trời nắng đẹp, nhớ đeo kính râm và bôi kem chống nắng!')
+      suggestions.push('🌴 Thích hợp để đi picnic hoặc hoạt động ngoài trời!')
+    } else if (weatherDesc.includes('mây') || weatherDesc.includes('cloud')) {
+      if (weatherDesc.includes('u ám') || weatherDesc.includes('overcast') || weatherDesc.includes('scattered')) {
+        suggestions.push('☁️ Trời âm u, có thể sẽ mưa, nhớ mang theo ô!')
+        suggestions.push('📱 Kiểm tra dự báo thời tiết để lên kế hoạch!')
+      } else {
+        suggestions.push('⛅ Trời có mây, thời tiết dễ chịu!')
+      }
+    } else if (weatherDesc.includes('sương mù') || weatherDesc.includes('fog') || weatherDesc.includes('mist') || weatherDesc.includes('haze')) {
+      suggestions.push('🌫️ Có sương mù, lái xe cẩn thận và bật đèn pha!')
+      suggestions.push('🚶‍♂️ Đi bộ cẩn thận, có thể gặp khó khăn khi nhìn đường!')
+    } else if (weatherDesc.includes('gió') || weatherDesc.includes('wind') || weatherDesc.includes('breeze')) {
+      if (windSpeed > 5) {
+        suggestions.push('💨 Gió mạnh, cẩn thận với các vật bay!')
+        suggestions.push('🏠 Đóng cửa sổ và cất đồ ngoài trời!')
+      } else if (windSpeed > 2) {
+        suggestions.push('🍃 Gió nhẹ, thời tiết mát mẻ dễ chịu!')
+      }
+    } else if (weatherDesc.includes('bão') || weatherDesc.includes('storm') || weatherDesc.includes('thunder')) {
+      suggestions.push('⛈️ Có bão, nên ở trong nhà và tránh ra ngoài!')
+      suggestions.push('🔌 Tắt các thiết bị điện không cần thiết!')
+    }
+    
+    // Humidity-based suggestions
+    if (humidity > 85) {
+      suggestions.push('💧 Độ ẩm rất cao, có thể gây khó chịu, nên bật quạt hoặc điều hòa!')
+      suggestions.push('🧺 Quần áo khó khô, nên dùng máy sấy!')
+    } else if (humidity > 70) {
+      suggestions.push('💧 Độ ẩm cao, có thể gây khó chịu, nên bật quạt!')
+    } else if (humidity < 30) {
+      suggestions.push('🏜️ Độ ẩm thấp, nhớ uống nhiều nước và dưỡng ẩm da!')
+      suggestions.push('🌿 Nên dùng máy tạo ẩm trong nhà!')
+    }
+    
+    // Time-based suggestions
+    const hour = new Date().getHours()
+    if (hour >= 5 && hour <= 8) {
+      suggestions.push('🌅 Buổi sáng sớm, thích hợp để tập thể dục và hít thở không khí trong lành!')
+    } else if (hour >= 8 && hour <= 11) {
+      suggestions.push('☀️ Buổi sáng đẹp trời, thích hợp để đi làm hoặc học tập!')
+    } else if (hour >= 11 && hour <= 14) {
+      suggestions.push('🌞 Giữa trưa, nên tránh ra ngoài nếu trời nắng gắt!')
+    } else if (hour >= 14 && hour <= 17) {
+      suggestions.push('🌤️ Buổi chiều, thích hợp để đi dạo và thư giãn!')
+    } else if (hour >= 17 && hour <= 20) {
+      suggestions.push('🌆 Chiều tối mát mẻ, thích hợp để đi dạo hoặc tập thể dục!')
+    } else if (hour >= 20 || hour <= 5) {
+      suggestions.push('🌙 Buổi tối, nên nghỉ ngơi và chuẩn bị cho ngày mai!')
+    }
+    
+    // Special combinations
+    if (temp > 30 && humidity > 70) {
+      suggestions.push('🥵 Trời nóng ẩm, nên ở trong nhà có điều hòa!')
+      suggestions.push('🧊 Uống nước mát và ăn trái cây để giải nhiệt!')
+    }
+    
+    if (temp < 18 && windSpeed > 3) {
+      suggestions.push('❄️ Trời lạnh và gió, nhớ mặc ấm và đeo khăn!')
+      suggestions.push('☕ Uống trà nóng để giữ ấm cơ thể!')
+    }
+    
+    if (temp >= 20 && temp <= 26 && humidity >= 40 && humidity <= 60 && windSpeed < 3) {
+      suggestions.push('🌈 Thời tiết hoàn hảo! Thích hợp cho mọi hoạt động ngoài trời!')
+    }
+    
+    // Pressure-based suggestions
+    const pressure = parseInt(weatherData.ap_suat.replace(' hPa', ''))
+    if (pressure < 1000) {
+      suggestions.push('📉 Áp suất thấp, có thể sẽ mưa, nhớ mang theo ô!')
+    } else if (pressure > 1020) {
+      suggestions.push('📈 Áp suất cao, thời tiết ổn định, thích hợp để lên kế hoạch!')
+    }
+    
+    // Loại bỏ các gợi ý trùng lặp và giới hạn 4 gợi ý
+    const uniqueSuggestions = [...new Set(suggestions)]
+    return uniqueSuggestions.slice(0, 4)
+  }, [])
+
+  useEffect(() => {
+    fetchWeather()
+    // Cập nhật thời tiết mỗi 30 phút
+    const interval = setInterval(fetchWeather, 30 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   if (!userInfo) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
@@ -191,8 +325,10 @@ export default function HomePage() {
     )
   }
 
+  const themeClasses = getThemeClasses()
+  
   return (
-    <div className={cn("min-h-screen bg-gradient-to-br dark:from-slate-900 dark:to-gray-900", seasonGradient)}>
+    <div className={cn("min-h-screen", themeClasses.bgClass)}>
       <div className={cn("container mx-auto px-4 py-8", largeText ? 'text-[1.05rem]' : '', highContrast ? 'filter contrast-125' : '')}>
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-8 flex-wrap">
@@ -207,9 +343,10 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {mounted && (
-              <Button variant="outline" size="icon" onClick={toggleTheme} title="Đổi giao diện">
-                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
+              <ThemeSelector 
+                currentTheme={currentTheme}
+                onThemeChange={changeTheme}
+              />
             )}
             <Button variant="outline" size="icon" className="w-9" onClick={() => setLargeText(v => !v)} title="Cỡ chữ lớn (A11y)">
               A+
@@ -245,8 +382,8 @@ export default function HomePage() {
 
 
         {/* User Info Card */}
-        <Card className="mb-8 border-0 shadow-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white relative overflow-hidden">
-          <CardContent className="p-6">
+        <Card className="mb-8 border-0 shadow-lg relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-600">
+          <CardContent className="p-6 text-white">
             <div className="pointer-events-none absolute -top-10 -left-8 h-40 w-40 bg-white/20 blur-3xl rounded-full" />
             <div className="pointer-events-none absolute -bottom-12 -right-10 h-48 w-48 bg-white/10 blur-3xl rounded-full" />
             <div className="relative flex items-center gap-6">
@@ -321,38 +458,158 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
+        {/* Weather Card */}
+        <Card className="mb-8 border-0 shadow-lg relative overflow-hidden bg-gradient-to-br from-sky-500 to-blue-600">
+          <CardContent className="p-6 text-white">
+            <div className="pointer-events-none absolute -top-10 -right-8 h-40 w-40 bg-white/20 blur-3xl rounded-full" />
+            <div className="pointer-events-none absolute -bottom-12 -left-10 h-48 w-48 bg-white/10 blur-3xl rounded-full" />
+            <div className="relative flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <Cloud className="h-5 w-5 text-white/80" />
+                  <h3 className="text-lg font-semibold">Thời tiết Cần Thơ</h3>
+                </div>
+                
+                {weatherLoading ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full animate-pulse" />
+                    <div className="space-y-2">
+                      <div className="h-4 bg-white/20 rounded animate-pulse w-24" />
+                      <div className="h-3 bg-white/20 rounded animate-pulse w-32" />
+                    </div>
+                  </div>
+                ) : weatherError ? (
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-8 w-8 text-white/80" />
+                    <div>
+                      <p className="text-white/90">{weatherError}</p>
+                      <Button 
+                        size="sm" 
+                        variant="secondary" 
+                        className="bg-white/20 hover:bg-white/30 text-white mt-2"
+                        onClick={fetchWeather}
+                      >
+                        Thử lại
+                      </Button>
+                    </div>
+                  </div>
+                ) : weatherData ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={weatherData.bieu_tuong} 
+                          alt={weatherData.thoi_tiet}
+                          className="w-16 h-16"
+                        />
+                        <div>
+                          <p className="text-2xl font-bold">{weatherData.nhiet_do}</p>
+                          <p className="text-white/90 capitalize">{weatherData.thoi_tiet}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="flex items-center gap-2 text-white/90">
+                        <Thermometer className="h-4 w-4" />
+                        <span className="text-sm">Nhiệt độ</span>
+                        <span className="font-medium">{weatherData.nhiet_do}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-white/90">
+                        <Droplets className="h-4 w-4" />
+                        <span className="text-sm">Độ ẩm</span>
+                        <span className="font-medium">{weatherData.do_am}</span>
+                    </div>
+                      <div className="flex items-center gap-2 text-white/90">
+                        <Wind className="h-4 w-4" />
+                        <span className="text-sm">Gió</span>
+                        <span className="font-medium">{weatherData.toc_do_gio}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-white/90">
+                        <Gauge className="h-4 w-4" />
+                        <span className="text-sm">Áp suất</span>
+                        <span className="font-medium">{weatherData.ap_suat}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Weather Suggestions */}
+                    {weatherData && (
+                      <div className="mt-4 p-3 bg-white/10 rounded-lg border border-white/20 backdrop-blur-sm">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-sm font-medium text-white/90">💡 Gợi ý thông minh:</span>
+                          <div className="flex-1 h-px bg-white/20"></div>
+                        </div>
+                        <div className="space-y-2.5">
+                          {getWeatherSuggestions(weatherData).map((suggestion: string, index: number) => (
+                            <div key={`weather-suggestion-${index}-${suggestion.length}`} className="flex items-start gap-3 text-sm group hover:bg-white/5 p-2 rounded-md transition-colors">
+                              <span className="text-white/70 mt-0.5 text-xs">#{index + 1}</span>
+                              <span className="text-white/90 leading-relaxed flex-1">{suggestion}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 pt-2 border-t border-white/20">
+                          <p className="text-xs text-white/70 text-center">
+                            💭 Gợi ý được cập nhật theo thời tiết thực tế
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center justify-between pt-2 border-t border-white/20">
+                      <p className="text-sm text-white/80">
+                        Cập nhật lúc {new Date().toLocaleTimeString('vi-VN', { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </p>
+                      <Button 
+                        size="sm" 
+                        variant="secondary" 
+                        className="bg-white/20 hover:bg-white/30 text-white"
+                        onClick={fetchWeather}
+                      >
+                        Làm mới
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quick Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          <div className="group rounded-xl p-4 bg-white/70 dark:bg-white/5 backdrop-blur border border-white/20 dark:border-white/10 shadow hover:shadow-lg transition-all">
+          <div className={cn("group rounded-xl p-4 backdrop-blur border shadow hover:shadow-lg transition-all bg-white/70 dark:bg-gray-800/70", themeClasses.borderClass)}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white shadow">
                 <Home className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Phòng đang thuê</p>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">{(khachHang as any)?.HopDongsDangThue?.[0]?.Phong?.DayPhong || '-'}{(khachHang as any)?.HopDongsDangThue?.[0]?.Phong?.SoPhong ? ` • ${(khachHang as any)?.HopDongsDangThue?.[0]?.Phong?.SoPhong}` : ''}</p>
+                <p className={cn("text-sm", themeClasses.textClass)}>Phòng đang thuê</p>
+                <p className={cn("font-semibold", themeClasses.textClass)}>{(khachHang as any)?.HopDongsDangThue?.[0]?.Phong?.DayPhong || '-'}{(khachHang as any)?.HopDongsDangThue?.[0]?.Phong?.SoPhong ? ` • ${(khachHang as any)?.HopDongsDangThue?.[0]?.Phong?.SoPhong}` : ''}</p>
               </div>
             </div>
           </div>
-          <div className="group rounded-xl p-4 bg-white/70 dark:bg-white/5 backdrop-blur border border-white/20 dark:border-white/10 shadow hover:shadow-lg transition-all">
+          <div className={cn("group rounded-xl p-4 backdrop-blur border shadow hover:shadow-lg transition-all bg-white/70 dark:bg-gray-800/70", themeClasses.borderClass)}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow">
                 <Receipt className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Hóa đơn chưa thanh toán</p>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">{Array.isArray(hoaDon) ? hoaDon.filter((i:any)=>!isPaidStatus(i?.TrangThaiThanhToan) && !((Number(i?.TienTra||i?.Tientra||0)) >= Number(i?.TongTien||0))).length : 0}</p>
+                <p className={cn("text-sm", themeClasses.textClass)}>Hóa đơn chưa thanh toán</p>
+                <p className={cn("font-semibold", themeClasses.textClass)}>{Array.isArray(hoaDon) ? hoaDon.filter((i:any)=>!isPaidStatus(i?.TrangThaiThanhToan) && !((Number(i?.TienTra||i?.Tientra||0)) >= Number(i?.TongTien||0))).length : 0}</p>
               </div>
             </div>
           </div>
-          <div className="group rounded-xl p-4 bg-white/70 dark:bg-white/5 backdrop-blur border border-white/20 dark:border-white/10 shadow hover:shadow-lg transition-all">
+          <div className={cn("group rounded-xl p-4 backdrop-blur border shadow hover:shadow-lg transition-all bg-white/70 dark:bg-gray-800/70", themeClasses.borderClass)}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow">
                 <Calendar className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Ngày tham gia</p>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">{
+                <p className={cn("text-sm", themeClasses.textClass)}>Ngày tham gia</p>
+                <p className={cn("font-semibold", themeClasses.textClass)}>{
                   (() => {
                     const hd = Array.isArray(hopDong) ? hopDong[0] : null
                     const d = hd?.NgayBatDau || hd?.NgayTaoHopDong
@@ -399,11 +656,11 @@ export default function HomePage() {
                     <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 italic">{numberToVietnameseWords(paySummary.tongNo)} đồng</p>
                   </div>
                 </div>
-                {payRecords.slice(0,5).map((r) => {
+                {(payRecords || []).slice(0,5).map((r, index) => {
                   const isPaid = isPaidRecord(r as any)
                   const tong = (r.TongTien ?? 0).toLocaleString('vi-VN')
                   return (
-                    <div key={r.ChiSoID} className="p-4 flex items-center justify-between">
+                    <div key={`payment-record-${index}-${r.ThangNam || 'unknown'}`} className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isPaid ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>
                           {isPaid ? <CheckCircle2 className="h-5 w-5"/> : <Clock className="h-5 w-5"/>}
@@ -433,7 +690,7 @@ export default function HomePage() {
             const Icon = item.icon
             return (
               <Card 
-                key={index}
+                key={`menu-${item.title}-${index}`}
                 className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-0 shadow-lg overflow-hidden"
                 onClick={() => router.push(item.href)}
               >

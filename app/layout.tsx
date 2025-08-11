@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   title: 'Nhà trọ Cần Thơ',
   description: 'Ứng dụng quản lý phòng trọ hiện đại và tiện lợi',
   generator: 'v0.dev',
+  manifest: '/manifest.json',
+}
+
+export const viewport = {
+  themeColor: '#0ea5e9',
 }
 
 export default function RootLayout({
