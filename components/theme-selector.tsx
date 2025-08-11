@@ -42,27 +42,54 @@ interface ThemeSelectorProps {
 
 export default function ThemeSelector({ currentTheme, onThemeChange }: ThemeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState<'left' | 'right'>('right')
 
-  const currentThemeConfig = themes.find(t => t.name === currentTheme) || themes[0]
+  // Debug logging
+  console.log('ThemeSelector rendered:', { currentTheme, isOpen, dropdownPosition })
+
+  // Kiểm tra vị trí để tránh tràn ra ngoài
+  const handleToggle = () => {
+    if (!isOpen) {
+      const button = document.querySelector('[data-theme-button]') as HTMLElement
+      if (button) {
+        const rect = button.getBoundingClientRect()
+        const viewportWidth = window.innerWidth
+        const dropdownWidth = 192 // w-48 = 12rem = 192px
+        
+        if (rect.right + dropdownWidth > viewportWidth) {
+          setDropdownPosition('left')
+        } else {
+          setDropdownPosition('right')
+        }
+      }
+    }
+    setIsOpen(!isOpen)
+  }
 
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2"
+        onClick={handleToggle}
+        className="flex items-center gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 min-w-[36px]"
+        data-theme-button
       >
         {currentTheme === 'Tối' ? (
           <Moon className="h-4 w-4" />
         ) : (
           <Sun className="h-4 w-4" />
         )}
-        {currentTheme}
+        <span className="hidden sm:inline">{currentTheme}</span>
+        <span className="sm:hidden">{currentTheme === 'Tối' ? '🌙' : '☀️'}</span>
       </Button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+        <div className={`absolute top-full mt-2 w-40 sm:w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 ${
+          dropdownPosition === 'left' 
+            ? 'right-0' 
+            : 'right-0 transform -translate-x-1/2 md:transform-none'
+        }`}>
           {themes.map((theme) => (
             <button
               key={theme.name}
@@ -70,19 +97,27 @@ export default function ThemeSelector({ currentTheme, onThemeChange }: ThemeSele
                 onThemeChange(theme.name)
                 setIsOpen(false)
               }}
-              className={`w-full p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+              className={`w-full p-2 sm:p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
                 currentTheme === theme.name ? 'bg-blue-50 dark:bg-blue-900/20' : ''
               }`}
             >
-              <div className="font-medium text-gray-900 dark:text-gray-100">
+              <div className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base">
                 {theme.name}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                 {theme.description}
               </div>
             </button>
           ))}
         </div>
+      )}
+
+      {/* Backdrop để đóng dropdown khi click ngoài */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setIsOpen(false)}
+        />
       )}
     </div>
   )

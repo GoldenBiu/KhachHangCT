@@ -342,12 +342,10 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {mounted && (
-              <ThemeSelector 
-                currentTheme={currentTheme}
-                onThemeChange={changeTheme}
-              />
-            )}
+            <ThemeSelector 
+              currentTheme={currentTheme}
+              onThemeChange={changeTheme}
+            />
             <Button variant="outline" size="icon" className="w-9" onClick={() => setLargeText(v => !v)} title="Cỡ chữ lớn (A11y)">
               A+
             </Button>
