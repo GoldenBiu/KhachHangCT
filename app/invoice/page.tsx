@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Receipt, Download, CreditCard, Calendar, User, Home, Loader2, AlertCircle, Eye } from 'lucide-react'
+import { Receipt, Download, CreditCard, Calendar, User, Home, Loader2, AlertCircle, Eye, Printer, Share2, FileDown, Filter, Bell } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { useCurrentKhachHang } from '@/hooks/use-khachhang'
 import { useHoaDon, useChiTietHoaDon } from '@/hooks/use-hoadon'
+import { useLichSuThanhToan, isPaidRecord, toVnd } from '@/hooks/use-lichsu-thanh-toan'
 import { toVietnameseNumberText } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -25,6 +26,8 @@ export default function InvoicePage() {
   const router = useRouter()
   const [selectedPeriod, setSelectedPeriod] = useState('current')
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null)
+  const [filterMonth, setFilterMonth] = useState<string>('')
+  const [filterRoom, setFilterRoom] = useState<string>('')
   const { khachHang, loading: khachHangLoading, error: khachHangError } = useCurrentKhachHang()
   const { hoaDon, loading: hoaDonLoading, error: hoaDonError } = useHoaDon()
 
@@ -35,7 +38,23 @@ export default function InvoicePage() {
     }
   }, [router])
 
-  const toNum = (v: any) => typeof v === 'number' ? v : Number(v || 0)
+  const toNum = (v: any) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    if (typeof v === 'string') {
+      const s = v.trim()
+      const decimalMatch = s.match(/([,\.])(\d{1,2})$/)
+      if (decimalMatch) {
+        const sep = decimalMatch[1]
+        const normalized = sep === ',' ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '')
+        const n = Number(normalized)
+        return Number.isFinite(n) ? Math.round(n) : 0
+      }
+      const n2 = Number(s.replace(/[.,]/g, ''))
+      return Number.isFinite(n2) ? n2 : 0
+    }
+    const n = Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
   const formatCurrency = (amount: any) => {
     return toNum(amount).toLocaleString('vi-VN') + ' VND'
   }
@@ -119,8 +138,39 @@ export default function InvoicePage() {
           <CardContent className="p-6">
             {hoaDon && hoaDon.length > 0 ? (
               <div className="space-y-4">
-                {hoaDon.map((invoice) => {
-                  const isPaid = invoice.TrangThaiThanhToan === 'Y' || invoice.TrangThaiThanhToan === '1' || invoice.TrangThaiThanhToan === 'true'
+                <div className="flex flex-wrap gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <input
+                      placeholder="Lọc theo tháng (MM/YYYY)"
+                      value={filterMonth}
+                      onChange={(e)=>setFilterMonth(e.target.value)}
+                      className="px-3 py-2 border rounded-md text-sm"
+                    />
+                  </div>
+                  <input
+                    placeholder="Lọc theo phòng (ví dụ 118)"
+                    value={filterRoom}
+                    onChange={(e)=>setFilterRoom(e.target.value)}
+                    className="px-3 py-2 border rounded-md text-sm"
+                  />
+                </div>
+                {hoaDon
+                  .filter(i => filterMonth ? String(i.ThangNam).includes(filterMonth) : true)
+                  .filter(i => filterRoom ? String(i.SoPhong||'').includes(filterRoom) : true)
+                  .map((invoice) => {
+                  const isPaid = (
+                    invoice.TrangThaiThanhToan === 'Y' ||
+                    invoice.TrangThaiThanhToan === '1' ||
+                    (invoice as any).TrangThaiThanhToan === 1 ||
+                    (invoice as any).TrangThaiThanhToan === true ||
+                    (invoice as any).TrangThaiThanhToan === 'true' ||
+                    (invoice as any).TrangThaiThanhToan === 'Đã thanh toán' ||
+                    (invoice as any).TrangThaiThanhToan === 'paid' ||
+                    (invoice as any).TrangThaiThanhToan === 'PAID' ||
+                    // additional rule: paid amount >= total
+                    (toNum((invoice as any).TienTra ?? (invoice as any).Tientra) >= toNum((invoice as any).TongTien))
+                  )
                   const dien = toNum(invoice.SoDienDaTieuThu) * toNum(invoice.GiaDienMoi)
                   const nuoc = toNum(invoice.SoNuocDaTieuThu) * toNum(invoice.GiaNuocMoi)
                   const totalRow = toNum(invoice.TienPhong) + dien + nuoc + toNum(invoice.PhiSuaChua) - toNum(invoice.PhiTru)
@@ -137,26 +187,26 @@ export default function InvoicePage() {
                             <p className="text-sm text-gray-600">Phòng:</p>
                             <p className="font-semibold">{invoice.DayPhong}-{invoice.SoPhong}</p>
                           </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Tổng tiền:</p>
-                            <p className="font-semibold text-red-600">
-                            {formatCurrency(invoice.TongTien)}
-                            </p>
-                          </div>
+                           <div>
+                             <p className="text-sm text-gray-600">Tổng tiền:</p>
+                             <p className="font-semibold text-red-600">
+                             {formatCurrency(toNum(invoice.TongTien))}
+                             </p>
+                           </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
                           <div>
                             <p className="text-sm text-gray-600">Tiền phòng:</p>
                             <p className="font-medium">{formatCurrency(invoice.TienPhong)}</p>
                           </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Tiền điện:</p>
-                            <p className="font-medium">{formatCurrency(dien)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Tiền nước:</p>
-                            <p className="font-medium">{formatCurrency(nuoc)}</p>
-                          </div>
+                           <div>
+                             <p className="text-sm text-gray-600">Tiền điện:</p>
+                             <p className="font-medium">{formatCurrency(toNum(dien))}</p>
+                           </div>
+                           <div>
+                             <p className="text-sm text-gray-600">Tiền nước:</p>
+                             <p className="font-medium">{formatCurrency(toNum(nuoc))}</p>
+                           </div>
                         </div>
                       </div>
                       <div className="flex flex-col space-y-2 ml-4">
@@ -309,6 +359,7 @@ export default function InvoicePage() {
 // Component để hiển thị chi tiết hóa đơn
 function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
   const { chiTietHoaDon, loading, error } = useChiTietHoaDon(chiSoID)
+  const { records: payRecords } = useLichSuThanhToan()
   const [paying, setPaying] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState<string>('momo')
@@ -383,6 +434,183 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
     }
   }
 
+  const handlePrint = () => {
+    if (!chiTietHoaDon) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    const style = `
+      <style>
+        body { font-family: Arial, sans-serif; color: #111; }
+        .container { width: 800px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 8px; }
+        .muted { color: #555; font-size: 12px; text-align: center; margin-bottom: 16px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 16px; }
+        .label { color: #555; font-size: 13px; }
+        .value { font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { border: 1px solid #ddd; padding: 8px; font-size: 13px; }
+        th { background: #f5f5f5; text-align: left; }
+        .right { text-align: right; }
+        .total { font-weight: 700; font-size: 16px; }
+        .footer { margin-top: 24px; display: flex; justify-content: space-between; font-size: 12px; }
+      </style>
+    `
+
+    const rows = [
+      { label: 'Tiền phòng', amount: chiTietHoaDon.tienPhong },
+      { label: 'Tiền điện', amount: chiTietHoaDon.tienDien },
+      { label: 'Tiền nước', amount: chiTietHoaDon.tienNuoc },
+      ...chiTietHoaDon.dsDichVu.map((dv: { ten: string; gia: number }) => ({ label: dv.ten, amount: dv.gia })),
+      { label: 'Phí sửa chữa', amount: chiTietHoaDon.suaChua },
+      { label: 'Phí trừ', amount: -chiTietHoaDon.phiTru },
+    ]
+    const rowsHtml = rows
+      .map(r => `<tr><td>${r.label}</td><td class="right">${formatCurrency(Math.abs(r.amount))}</td></tr>`) 
+      .join('')
+
+    const html = `
+      <html>
+        <head>
+          <meta charSet="utf-8" />
+          <title>Hóa đơn ${chiTietHoaDon.thangNam}</title>
+          ${style}
+        </head>
+        <body onload="window.print(); window.close();">
+          <div class="container">
+            <h1>HÓA ĐƠN TIỀN TRỌ</h1>
+            <div class="muted">Tháng/Năm: ${chiTietHoaDon.thangNam}</div>
+            <div class="grid">
+              <div>
+                <div class="label">Khách hàng</div>
+                <div class="value">${chiTietHoaDon.tenKhachHang}</div>
+              </div>
+              <div>
+                <div class="label">Số điện thoại</div>
+                <div class="value">${chiTietHoaDon.soDienThoai}</div>
+              </div>
+              <div>
+                <div class="label">Phòng</div>
+                <div class="value">${chiTietHoaDon.phong}</div>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr><th>Khoản phí</th><th class="right">Số tiền</th></tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+                <tr>
+                  <td class="total">Tổng cộng</td>
+                  <td class="right total">${formatCurrency(totalAmount)}</td>
+                </tr>
+                <tr>
+                  <td>Tiền đã trả</td>
+                  <td class="right">${formatCurrency(paidAmount)}</td>
+                </tr>
+                <tr>
+                  <td>Tiền nợ</td>
+                  <td class="right">${formatCurrency(debtAmount)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="footer">
+              <div>Khách hàng ký</div>
+              <div>Ngày in: ${new Date().toLocaleString('vi-VN')}</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  }
+
+  const handleExportPdf = async () => {
+    if (!chiTietHoaDon) return
+    // Dynamic import without types to avoid type dependency
+    const anyJsPdf: any = await import('jspdf')
+    const doc = new anyJsPdf.jsPDF()
+    // Try to embed a Vietnamese-capable font to avoid diacritics issues
+    const fontName = 'RobotoVN'
+    let hasVNFont = false
+    try {
+      const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/roboto/files/roboto-vietnamese-400-normal.ttf'
+      const res = await fetch(fontUrl)
+      const buf = await res.arrayBuffer()
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+      doc.addFileToVFS(`${fontName}.ttf`, base64)
+      doc.addFont(`${fontName}.ttf`, fontName, 'normal')
+      doc.setFont(fontName, 'normal')
+      hasVNFont = true
+    } catch {
+      // fallback: use a built-in font to avoid undefined widths
+      doc.setFont('helvetica', 'normal')
+    }
+    // Verify current font has width metrics; if not, fallback to helvetica
+    try {
+      // getTextWidth will access font widths; if not available, it throws
+      const w = doc.getTextWidth('A')
+      if (!Number.isFinite(w)) throw new Error('invalid width')
+    } catch {
+      doc.setFont('helvetica', 'normal')
+      hasVNFont = false
+    }
+    const line = (y: number) => doc.line(10, y, 200, y)
+    let y = 14
+    // If font VN không khả dụng, loại bỏ dấu để tránh lỗi hiển thị
+    const removeDiacritics = (s: string) =>
+      s
+        .normalize('NFD')
+        .replace(/\p{Diacritic}+/gu, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+    const txt = (s: string) => hasVNFont ? s : removeDiacritics(s)
+
+    doc.setFontSize(16)
+    doc.text(txt('HÓA ĐƠN TIỀN TRỌ'), 105, y, { align: 'center' })
+    y += 8
+    doc.setFontSize(10)
+    doc.text(txt(`Tháng/Năm: ${chiTietHoaDon.thangNam}`), 10, y)
+    y += 6
+    doc.text(txt(`Khách hàng: ${chiTietHoaDon.tenKhachHang}`), 10, y)
+    y += 6
+    doc.text(txt(`Số điện thoại: ${chiTietHoaDon.soDienThoai}`), 10, y)
+    y += 6
+    doc.text(txt(`Phòng: ${chiTietHoaDon.phong}`), 10, y)
+    y += 6
+    line(y); y += 6
+    const rows = [
+      [txt('Tiền phòng'), chiTietHoaDon.tienPhong],
+      [txt('Tiền điện'), chiTietHoaDon.tienDien],
+      [txt('Tiền nước'), chiTietHoaDon.tienNuoc],
+      ...chiTietHoaDon.dsDichVu.map((d:any)=>[txt(d.ten), d.gia]),
+      [txt('Phí sửa chữa'), chiTietHoaDon.suaChua],
+      [txt('Phí trừ'), -chiTietHoaDon.phiTru],
+    ]
+    doc.setFontSize(11)
+    rows.forEach(([label, amount]) => {
+      doc.text(String(label), 10, y)
+      doc.text(formatCurrency(Math.abs(Number(amount))), 200, y, { align: 'right' })
+      y += 6
+    })
+    line(y); y += 6
+    // Emulate bold by increasing size slightly to avoid missing bold style for custom font
+    const prevSize = doc.getFontSize()
+    doc.setFont(hasVNFont ? fontName : 'helvetica', 'normal')
+    doc.setFontSize(prevSize + 1)
+    doc.text(txt('Tổng cộng'), 10, y)
+    doc.text(formatCurrency(totalAmount), 200, y, { align: 'right' }); y += 6
+    doc.setFontSize(prevSize)
+    doc.text(txt('Tiền đã trả'), 10, y)
+    doc.text(formatCurrency(paidAmount), 200, y, { align: 'right' }); y += 6
+    doc.text(txt('Tiền nợ'), 10, y)
+    doc.text(formatCurrency(Math.max(0, totalAmount - paidAmount)), 200, y, { align: 'right' }); y += 10
+    doc.setFontSize(9)
+    doc.text(txt(`Ngày xuất: ${new Date().toLocaleString('vi-VN')}`), 10, y)
+    doc.save(`hoa-don-${chiTietHoaDon.thangNam}-${chiTietHoaDon.phong}.pdf`)
+  }
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -412,6 +640,31 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString('vi-VN') + ' VND'
   }
+
+  // Determine paid state using latest payment history fallback
+  const recordById = (payRecords || []).find((r:any) => String(r.ChiSoID) === String(chiSoID))
+  let record: any = recordById
+  if (!record && chiTietHoaDon) {
+    const roomStr = String((chiTietHoaDon as any).phong || '')
+    const parts = roomStr.split('-').map((s: string) => s.trim())
+    const day = parts[0]
+    const room = parts[1]?.replace(/^0+/, '')
+    record = (payRecords || []).find((r: any) => {
+      const rRoom = String(r.SoPhong || '').replace(/^0+/, '')
+      return String(r.ThangNam) === String((chiTietHoaDon as any).thangNam) && rRoom === room
+    })
+  }
+
+  const detailPaid = toVnd((chiTietHoaDon as any)?.tienTra ?? (chiTietHoaDon as any)?.TienTra) ?? 0
+  const detailTotal = toVnd((chiTietHoaDon as any)?.tongCong ?? (chiTietHoaDon as any)?.TongCong ?? (chiTietHoaDon as any)?.TongTien) ?? 0
+  const recordPaid = toVnd((record as any)?.TienTra ?? (record as any)?.Tientra) ?? 0
+  const recordTotal = toVnd((record as any)?.TongTien) ?? 0
+
+  const paidAmount = Math.max(detailPaid, recordPaid)
+  const totalAmount = detailTotal || recordTotal
+  const alreadyPaid = (totalAmount > 0 && paidAmount >= totalAmount) || (record ? isPaidRecord(record as any) : false)
+  const debtAmount = Math.max(0, totalAmount - paidAmount)
+  const displayStatus = alreadyPaid ? 'Đã thanh toán' : 'Chưa thanh toán'
 
   const feeItems = [
     { label: 'Tiền phòng', amount: chiTietHoaDon.tienPhong },
@@ -486,20 +739,20 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
           <div className="flex justify-between items-center mb-4">
             <span className="text-xl font-bold text-gray-900">Tổng cộng:</span>
             <span className="text-2xl font-bold text-red-600">
-              {formatCurrency(chiTietHoaDon.tongCong)}
+              {formatCurrency(totalAmount)}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-gray-600">Tiền nợ: <span className="font-semibold text-gray-900">{formatCurrency(chiTietHoaDon.tienNo)}</span></p>
-              <p className="text-gray-600">Tiền trả: <span className="font-semibold text-gray-900">{formatCurrency(chiTietHoaDon.tienTra)}</span></p>
+                <p className="text-gray-600">Tiền nợ: <span className="font-semibold text-gray-900">{formatCurrency(debtAmount)}</span></p>
+                <p className="text-gray-600">Tiền trả: <span className="font-semibold text-gray-900">{formatCurrency(paidAmount)}</span></p>
             </div>
             <div>
               <p className="text-gray-600">Trạng thái: 
                 <span className={`font-semibold ml-1 ${
-                  chiTietHoaDon.trangThai === 'Đã thanh toán' ? 'text-green-600' : 'text-yellow-600'
+                  alreadyPaid ? 'text-green-600' : 'text-yellow-600'
                 }`}>
-                  {chiTietHoaDon.trangThai}
+                  {displayStatus}
                 </span>
               </p>
             </div>
@@ -508,10 +761,10 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
       </div>
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Button 
           onClick={() => setPaymentOpen(true)}
-          disabled={paying}
+          disabled={paying || alreadyPaid}
           className="h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-70"
         >
           {paying ? (
@@ -519,6 +772,8 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />
               Đang chuyển tới MoMo...
             </>
+          ) : alreadyPaid ? (
+            'Đã thanh toán đủ'
           ) : (
             <>
               <CreditCard className="h-5 w-5 mr-2" />
@@ -527,14 +782,33 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
           )}
         </Button>
         
-        <Button 
-          variant="outline"
-          onClick={() => alert('Chức năng tải ảnh hóa đơn đang được phát triển')}
-          className="h-12 border-blue-200 text-blue-600 hover:bg-blue-50"
-        >
-          <Download className="h-5 w-5 mr-2" />
-          Tải Ảnh Hóa Đơn
-        </Button>
+          {/* <Button 
+            variant="outline"
+            onClick={() => alert('Chức năng tải ảnh hóa đơn đang được phát triển')}
+            className="h-12 border-blue-200 text-blue-600 hover:bg-blue-50"
+          >
+            <Download className="h-5 w-5 mr-2" />
+            Tải Ảnh Hóa Đơn
+          </Button> */}
+
+        <div className="grid grid-cols-2 gap-4">
+          <Button 
+            variant="outline"
+            onClick={handlePrint}
+            className="h-12 border-blue-200 text-blue-600 hover:bg-blue-50"
+          >
+            <Printer className="h-5 w-5 mr-2" />
+            In hóa đơn
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={handleExportPdf}
+            className="h-12 border-blue-200 text-blue-600 hover:bg-blue-50"
+          >
+            <FileDown className="h-5 w-5 mr-2" />
+            Xuất PDF
+          </Button>
+        </div>
       </div>
 
       {/* Payment method selection dialog */}

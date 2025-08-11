@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Receipt, ArrowLeft, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
-import { useLichSuThanhToan } from '@/hooks/use-lichsu-thanh-toan'
+import { useLichSuThanhToan, isPaidRecord } from '@/hooks/use-lichsu-thanh-toan'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function PaymentHistoryPage() {
@@ -128,13 +128,13 @@ export default function PaymentHistoryPage() {
             {records.length === 0 ? (
               <div className="p-6 text-center text-gray-600 dark:text-gray-300">Chưa có lịch sử thanh toán</div>
             ) : (
-              <div className="divide-y divide-gray-200 dark:divide-gray-800">
+               <div className="divide-y divide-gray-200 dark:divide-gray-800">
                 {records.map((r, idx) => {
-                  const isPaid = r.TrangThaiThanhToan === 'Y' || r.TrangThaiThanhToan === '1' || r.TrangThaiThanhToan === 'Đã thanh toán' || r.TrangThaiThanhToan === 'paid' || r.TrangThaiThanhToan === 'PAID'
-                  const tong = (r.TongTien ?? 0).toLocaleString('vi-VN')
+                  const isPaid = isPaidRecord(r as any)
+                  const tong = Number(r.TongTien ?? 0).toLocaleString('vi-VN')
                   const thang = r.ThangNam
-                  const dien = (r.TienDien ?? r.SoDienDaTieuThu ?? 0).toLocaleString('vi-VN')
-                  const nuoc = (r.TienNuoc ?? r.SoNuocDaTieuThu ?? 0).toLocaleString('vi-VN')
+                  const dien = Number(r.TienDien ?? r.SoDienDaTieuThu ?? 0).toLocaleString('vi-VN')
+                  const nuoc = Number(r.TienNuoc ?? r.SoNuocDaTieuThu ?? 0).toLocaleString('vi-VN')
                   const itemKey = `${r.ThangNam || 'NA'}-${r.SoPhong || r.DayPhong || 'X'}-${r.ChiSoID ?? idx}`
                   return (
                     <div key={itemKey} className="p-4 flex items-center justify-between">

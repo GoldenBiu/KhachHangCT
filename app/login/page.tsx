@@ -126,7 +126,12 @@ export default function LoginPage() {
             </Button>
 
             <div className="text-center">
-              <Button variant="link" className="text-blue-600 hover:text-blue-700">
+              <Button
+                type="button"
+                variant="link"
+                className="text-blue-600 hover:text-blue-700"
+                onClick={() => router.push('/forgot-password')}
+              >
                 Quên mật khẩu?
               </Button>
             </div>

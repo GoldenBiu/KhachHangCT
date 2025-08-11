@@ -18,6 +18,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useCurrentKhachHang } from '@/hooks/use-khachhang'
+import { useHoaDon } from '@/hooks/use-hoadon'
+import { isPaidStatus } from '@/hooks/use-lichsu-thanh-toan'
 
 const userData = {
   rentDate: '01/01/2024',
@@ -26,6 +28,7 @@ const userData = {
 export default function ProfilePage() {
   const router = useRouter()
   const { khachHang, loading: khachHangLoading, error: khachHangError } = useCurrentKhachHang()
+  const { hoaDon } = useHoaDon()
 
   useEffect(() => {
     const token = localStorage.getItem('userToken')
@@ -40,8 +43,8 @@ export default function ProfilePage() {
     router.replace('/login')
   }
 
-  const handleQuickAction = (action: string) => {
-    alert(`Chức năng ${action} đang được phát triển`)
+  const handleQuickAction = (href: string) => {
+    router.push(href)
   }
 
   // Hiển thị loading nếu đang tải thông tin khách hàng
@@ -86,10 +89,14 @@ export default function ProfilePage() {
     },
   ]
 
+  const unpaidCount = Array.isArray(hoaDon)
+    ? hoaDon.filter((i: any) => !isPaidStatus(i?.TrangThaiThanhToan) && !((Number(i?.TienTra || i?.Tientra || 0)) >= Number(i?.TongTien || 0))).length
+    : 0
+
   const quickActions = [
-    { icon: Receipt, label: 'Xem Hóa Đơn', action: 'Xem Hóa Đơn' },
-    { icon: HeadphonesIcon, label: 'Liên Hệ Hỗ Trợ', action: 'Liên Hệ Hỗ Trợ' },
-    { icon: FileText, label: 'Xem Hợp Đồng', action: 'Xem Hợp Đồng' },
+    { icon: Receipt, label: 'Xem Hóa Đơn', href: '/invoice', extra: unpaidCount > 0 ? `${unpaidCount} chưa thanh toán` : 'Xem chi tiết' },
+    { icon: HeadphonesIcon, label: 'Liên Hệ Hỗ Trợ', href: '/contact', extra: 'Hỗ trợ' },
+    { icon: FileText, label: 'Xem Hợp Đồng', href: '/contract', extra: khachHang?.HopDongsDangThue?.[0]?.TrangThaiHopDong || 'Chi tiết' },
   ]
 
   return (
@@ -339,13 +346,16 @@ export default function ProfilePage() {
                   <Button
                     key={index}
                     variant="outline"
-                    className="h-auto p-4 flex flex-col items-center space-y-2 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-white/10 dark:hover:border-blue-800 transition-colors"
-                    onClick={() => handleQuickAction(action.action)}
+                    className="h-auto p-4 flex flex-col items-center space-y-1 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-white/10 dark:hover:border-blue-800 transition-colors"
+                    onClick={() => handleQuickAction(action.href)}
                   >
                     <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/40 rounded-lg flex items-center justify-center">
                       <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <span className="text-sm font-medium text-center dark:text-gray-100">{action.label}</span>
+                    {action.extra && (
+                      <span className="text-xs text-gray-600 dark:text-gray-400">{action.extra}</span>
+                    )}
                   </Button>
                 )
               })}

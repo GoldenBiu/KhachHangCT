@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useCurrentKhachHang } from '@/hooks/use-khachhang'
 import { useHoaDon } from '@/hooks/use-hoadon'
-import { useLichSuThanhToan } from '@/hooks/use-lichsu-thanh-toan'
+import { useLichSuThanhToan, isPaidStatus, isPaidRecord } from '@/hooks/use-lichsu-thanh-toan'
 import { useHopDong } from '@/hooks/use-hopdong'
 
 interface UserInfo {
@@ -184,7 +184,7 @@ export default function HomePage() {
     <div className={cn("min-h-screen bg-gradient-to-br dark:from-slate-900 dark:to-gray-900", seasonGradient)}>
       <div className={cn("container mx-auto px-4 py-8", largeText ? 'text-[1.05rem]' : '', highContrast ? 'filter contrast-125' : '')}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-3 mb-8 flex-wrap">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
               <Home className="h-6 w-6 text-white" />
@@ -194,24 +194,23 @@ export default function HomePage() {
               <p className="text-gray-600 dark:text-gray-300">Chào mừng trở lại!</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {mounted && (
               <Button variant="outline" size="icon" onClick={toggleTheme} title="Đổi giao diện">
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setLargeText(v => !v)} title="Cỡ chữ lớn (A11y)">
+            <Button variant="outline" size="icon" className="w-9" onClick={() => setLargeText(v => !v)} title="Cỡ chữ lớn (A11y)">
               A+
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setHighContrast(v => !v)} title="Chế độ tương phản cao">
+            <Button variant="outline" size="icon" className="w-9" onClick={() => setHighContrast(v => !v)} title="Chế độ tương phản cao">
               HC
             </Button>
             
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
-                <LogOut className="h-4 w-4 mr-2" />
-                Đăng xuất
+              <Button variant="destructive" size="icon" title="Đăng xuất">
+                <LogOut className="h-4 w-4" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -240,16 +239,18 @@ export default function HomePage() {
             <div className="pointer-events-none absolute -top-10 -left-8 h-40 w-40 bg-white/20 blur-3xl rounded-full" />
             <div className="pointer-events-none absolute -bottom-12 -right-10 h-48 w-48 bg-white/10 blur-3xl rounded-full" />
             <div className="relative flex items-center gap-6">
-              <div className="relative">
+              <div className="relative group">
+                <div className="absolute -inset-1 rounded-full bg-white/30 blur-xl opacity-40 group-hover:opacity-60 transition" />
+                <div className="absolute -inset-2 rounded-full bg-gradient-to-tr from-pink-300/40 to-cyan-300/40 blur-2xl opacity-40 group-hover:opacity-70 transition" />
                 <Avatar
-                  className="h-16 w-16 border-2 border-white/20 cursor-pointer hover:ring-2 hover:ring-white/40"
+                  className="relative h-20 w-20 ring-4 ring-white/30 shadow-xl shadow-black/10 cursor-pointer transition-transform group-hover:scale-[1.03]"
                   onClick={handleAvatarClick}
                   title="Nhấp để đổi ảnh đại diện"
                 >
                   {avatarUrl ? (
-                    <AvatarImage src={avatarUrl} alt="Ảnh đại diện" />
+                    <AvatarImage src={avatarUrl} alt="Ảnh đại diện" className="object-cover" />
                   ) : null}
-                  <AvatarFallback className="bg-white/20 text-white text-lg font-semibold">
+                  <AvatarFallback className="bg-white/25 text-white text-xl font-semibold">
                     {userInfo.HoTen ? userInfo.HoTen.charAt(0).toUpperCase() : userInfo.TenDangNhap.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -260,6 +261,7 @@ export default function HomePage() {
                   className="hidden"
                   onChange={handleAvatarChange}
                 />
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/25 backdrop-blur text-white opacity-0 group-hover:opacity-100 transition">Đổi ảnh</div>
               </div>
               <div className="flex-1">
                 <h2 className="text-xl font-bold">
@@ -318,7 +320,7 @@ export default function HomePage() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Hóa đơn chưa thanh toán</p>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">{Array.isArray(hoaDon) ? hoaDon.filter((i:any)=>!(i.TrangThaiThanhToan==='Y'||i.TrangThaiThanhToan==='1'||i.TrangThaiThanhToan==='true')).length : 0}</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{Array.isArray(hoaDon) ? hoaDon.filter((i:any)=>!isPaidStatus(i?.TrangThaiThanhToan) && !((Number(i?.TienTra||i?.Tientra||0)) >= Number(i?.TongTien||0))).length : 0}</p>
               </div>
             </div>
           </div>
@@ -377,7 +379,7 @@ export default function HomePage() {
                   </div>
                 </div>
                 {payRecords.slice(0,5).map((r) => {
-                  const isPaid = r.TrangThaiThanhToan === 'Y'
+                  const isPaid = isPaidRecord(r as any)
                   const tong = (r.TongTien ?? 0).toLocaleString('vi-VN')
                   return (
                     <div key={r.ChiSoID} className="p-4 flex items-center justify-between">

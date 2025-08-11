@@ -199,18 +199,59 @@ function toNum(v: any): number | undefined {
 }
 
 // Some APIs may return numbers formatted as strings with dots/commas
-function toVnd(v: any): number | undefined {
+export function toVnd(v: any): number | undefined {
   if (v === null || v === undefined || v === '') return undefined
-  if (typeof v === 'number') return v
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v)
   if (typeof v === 'string') {
-    const cleaned = v.replace(/[.,\s]/g, '')
-    const n = Number(cleaned)
-    return Number.isFinite(n) ? n : undefined
+    const raw = v.trim()
+    // Keep only digits, separators and minus if any
+    const s = raw.replace(/[^\d,\.\-]/g, '')
+    if (s === '') return undefined
+
+    // If string ends with a decimal part like ",xx" or ".xx", treat that as decimals
+    const decimalMatch = s.match(/([,\.])(\d{1,2})$/)
+    if (decimalMatch) {
+      const sep = decimalMatch[1]
+      let normalized = s
+      if (sep === ',') {
+        // Common VND formats: 1.900.000,00 → 1900000
+        normalized = normalized.replace(/\./g, '').replace(',', '.')
+      } else {
+        // Formats: 1,900,000.00 → 1900000
+        normalized = normalized.replace(/,/g, '')
+      }
+      const n = Number(normalized)
+      if (Number.isFinite(n)) return Math.round(n)
+    }
+
+    // Otherwise, treat all separators as thousands separators
+    const n2 = Number(s.replace(/[.,]/g, ''))
+    return Number.isFinite(n2) ? n2 : undefined
   }
   return undefined
 }
 
-function isPaidStatus(v: any): boolean {
-  return v === 'Y' || v === '1' || v === 1 || v === true || v === 'true' || v === 'Đã thanh toán' || v === 'paid' || v === 'PAID'
+export function isPaidStatus(v: any): boolean {
+  return (
+    v === 'Y' ||
+    v === '1' ||
+    v === 1 ||
+    v === true ||
+    v === 'true' ||
+    v === 'Đã thanh toán' ||
+    v === 'paid' ||
+    v === 'PAID' ||
+    v === '0' || // một số hệ thống dùng 0 = đã thanh toán
+    v === 0
+  )
+}
+
+export function isPaidRecord(r: LichSuThanhToanRecord): boolean {
+  if (!r) return false
+  const byStatus = isPaidStatus(r.TrangThaiThanhToan)
+  const paid = toVnd(r.TienTra ?? r.Tientra) ?? 0
+  const total = toVnd(r.TongTien) ?? 0
+  const byAmount = total > 0 && paid >= total
+  return byStatus || byAmount
 }
 
