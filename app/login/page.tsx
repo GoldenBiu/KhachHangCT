@@ -1,6 +1,6 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
@@ -15,13 +15,37 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Simple math CAPTCHA
+  const [challenge, setChallenge] = useState<{ q: string; a: number }>({ q: '', a: 0 })
+  const [answer, setAnswer] = useState('')
   const router = useRouter()
+
+  const genChallenge = () => {
+    const ops: Array<"+" | "-" | "×"> = ["+", "-", "×"]
+    const a = Math.floor(Math.random() * 9) + 1
+    const b = Math.floor(Math.random() * 9) + 1
+    const op = ops[Math.floor(Math.random() * ops.length)]
+    const res = op === "+" ? a + b : op === "-" ? a - b : a * b
+    setChallenge({ q: `${a} ${op} ${b} = ?`, a: res })
+    setAnswer('')
+  }
+
+  useEffect(() => {
+    genChallenge()
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!username || !password) {
       setError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu')
+      return
+    }
+
+    // Validate CAPTCHA before sending request
+    if (String(parseInt(answer, 10)) !== String(challenge.a)) {
+      setError('Sai phép tính xác thực. Vui lòng thử lại')
+      genChallenge()
       return
     }
 
@@ -54,10 +78,12 @@ export default function LoginPage() {
         }, 1500)
       } else {
         setError(data.message || 'Tên đăng nhập hoặc mật khẩu không đúng')
+        genChallenge()
       }
     } catch (error) {
       console.error('Lỗi kết nối:', error)
       setError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet.')
+      genChallenge()
     } finally {
       setLoading(false)
     }
@@ -71,8 +97,8 @@ export default function LoginPage() {
             <Home className="h-8 w-8 text-white" />
           </div>
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            BoardingHouse
-          </CardTitle>
+            Nhà trọ Cần Thơ - Khách Hàng
+          </CardTitle>  
           <CardDescription className="text-base">
             Đăng nhập hệ thống quản lý phòng trọ
           </CardDescription>
@@ -90,6 +116,27 @@ export default function LoginPage() {
                 className="h-11"
                 disabled={loading}
               />
+            </div>
+            {/* CAPTCHA */}
+            <div className="space-y-2">
+              <Label>Trả lời phép tính để xác thực</Label>
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-2 rounded-md bg-slate-100 text-slate-700 min-w-[120px] text-center">
+                  {challenge.q || '...'}
+                </div>
+                <Input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Câu trả lời"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value.replace(/[^0-9-]/g, ''))}
+                  className="h-11 max-w-[160px]"
+                  disabled={loading}
+                />
+                <Button type="button" variant="outline" size="icon" onClick={genChallenge} title="Đổi phép tính">
+                  ↻
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Mật khẩu</Label>

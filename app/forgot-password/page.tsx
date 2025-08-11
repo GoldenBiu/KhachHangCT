@@ -16,10 +16,10 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Theo API backend: chỉ cần KhachHangID, PhongID (optional), NoiDung
+  // Theo API backend (bản cập nhật): KhachHangID (bắt buộc), SoPhong (tuỳ chọn), NoiDung
   const [form, setForm] = useState({
     KhachHangID: '',
-    PhongID: '',
+    SoPhong: '',
     NoiDung: ''
   })
 
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
         },
         body: JSON.stringify({
           KhachHangID: Number(form.KhachHangID),
-          PhongID: form.PhongID ? Number(form.PhongID) : undefined,
+          SoPhong: form.SoPhong && String(form.SoPhong).trim() !== '' ? String(form.SoPhong).trim() : undefined,
           NoiDung: form.NoiDung && form.NoiDung.trim() !== '' ? form.NoiDung.trim() : 'Tôi quên mật khẩu, vui lòng hỗ trợ'
         }),
       })
@@ -98,8 +98,8 @@ export default function ForgotPasswordPage() {
                 <Input id="KhachHangID" value={form.KhachHangID} onChange={update('KhachHangID')} placeholder="VD: 41" />
               </div>
               <div>
-                <Label htmlFor="PhongID">Phòng ID (nếu có)</Label>
-                <Input id="PhongID" value={form.PhongID} onChange={update('PhongID')} placeholder="VD: 82" />
+                <Label htmlFor="SoPhong">Số phòng (nếu có)</Label>
+                <Input id="SoPhong" value={form.SoPhong} onChange={update('SoPhong')} placeholder="VD: 118" />
               </div>
             </div>
 

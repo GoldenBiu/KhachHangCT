@@ -29,6 +29,7 @@ interface UserInfo {
   HoTen?: string
   TenDangNhap: string
   Email?: string
+  KhachHangID?: string | number
 }
 
 export default function HomePage() {
@@ -112,6 +113,13 @@ export default function HomePage() {
     const saved = localStorage.getItem(key)
     if (saved) setAvatarUrl(saved)
   }, [userInfo?.TenDangNhap])
+
+  // Sync KhachHangID from khachHang data when available
+  useEffect(() => {
+    if (khachHang?.KhachHangID && userInfo) {
+      setUserInfo(prev => prev ? { ...prev, KhachHangID: khachHang.KhachHangID } : prev)
+    }
+  }, [khachHang?.KhachHangID, userInfo])
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click()
@@ -265,13 +273,23 @@ export default function HomePage() {
               </div>
               <div className="flex-1">
                 <h2 className="text-xl font-bold">
-                  Xin chào, {userInfo.HoTen || 'Người dùng'}!
+                  Xin chào, {(() => {
+                    // Ưu tiên tên từ thông tin khách hàng, sau đó từ userInfo, cuối cùng là fallback
+                    const khachHangHoTen = khachHang?.HoTenKhachHang
+                    return khachHangHoTen || userInfo.HoTen || 'Người dùng'
+                  })()}!
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                   <div className="flex items-center text-white/90">
                     <User className="h-4 w-4 mr-2" />
                     <span className="text-sm">Tên đăng nhập: {userInfo.TenDangNhap}</span>
                   </div>
+                  {userInfo.KhachHangID && (
+                    <div className="flex items-center text-white/90">
+                      <User className="h-4 w-4 mr-2" />
+                      <span className="text-sm">ID khách hàng: {userInfo.KhachHangID}</span>
+                    </div>
+                  )}
                   {userInfo.Email && (
                     <div className="flex items-center text-white/90">
                       <Mail className="h-4 w-4 mr-2" />
@@ -364,16 +382,16 @@ export default function HomePage() {
               <div className="divide-y divide-gray-200 dark:divide-gray-800">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Số lần thanh toán</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Số lần thanh toán đủ</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{paySummary.soLanThanhToan}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Tổng đã thanh toán</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Tổng số tiền đã thanh toán</p>
                     <p className="text-lg font-bold text-emerald-600 break-words">{paySummary.tongDaThanhToan.toLocaleString('vi-VN')} VND</p>
                     <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 italic">{numberToVietnameseWords(paySummary.tongDaThanhToan)} đồng</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Tổng nợ</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Tổng số tiền nợ</p>
                     <p className="text-lg font-bold text-red-600 break-words">{paySummary.tongNo.toLocaleString('vi-VN')} VND</p>
                     <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 italic">{numberToVietnameseWords(paySummary.tongNo)} đồng</p>
                   </div>
