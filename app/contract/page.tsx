@@ -630,6 +630,153 @@ export default function ContractPage() {
           </div>
         </div>
       </div>
+
+      {/* Black & White printable contract (text-only) */}
+      {(() => {
+        const currentContract: any = (hopDong || []).find((c: any) => c.TrangThaiHopDong === 'HoatDong') || (hopDong || [])[0] || null
+        const phong = khachHang?.HopDongsDangThue?.find((hd) => hd.HopDongID === currentContract?.HopDongID)?.Phong || khachHang?.HopDongsDangThue?.[0]?.Phong
+        const landlordName = currentContract?.HoTenQuanLi || '................................'
+        const landlordPhone = currentContract?.SoDienThoaiDN || '................................'
+        const landlordId = currentContract?.SoCCCD || '................................'
+        const landlordAddr = currentContract?.DiaChiChiTiet || '................................'
+        const tenantName = khachHang?.HoTenKhachHang || '................................'
+        const tenantPhone = khachHang?.SoDienThoai || '................................'
+        const tenantId = khachHang?.SoCCCD || '................................'
+        const tenantBirth = khachHang?.NgaySinh ? new Date(khachHang.NgaySinh as any).toLocaleDateString('vi-VN') : '.../.../...'
+        const tenantGender = khachHang?.GioiTinh || '........................'
+        const tenantAddr = (khachHang?.DiaChiCuThe && khachHang?.PhuongXa && khachHang?.QuanHuyen && khachHang?.TinhThanh)
+          ? `${khachHang.DiaChiCuThe}, ${khachHang.PhuongXa}, ${khachHang.QuanHuyen}, ${khachHang.TinhThanh}`
+          : (khachHang?.DiaChiCuThe || '................................')
+        const dayPhong = (phong as any)?.DayPhong || '...'
+        const soPhong = (phong as any)?.SoPhong || '...'
+        const giaPhong = (phong as any)?.GiaPhong ? Number((phong as any)?.GiaPhong).toLocaleString('vi-VN') : '........'
+        const dienTich = (phong as any)?.DienTich ? String((phong as any)?.DienTich) : '........'
+        const ngayBatDau = currentContract?.NgayBatDau ? new Date(currentContract.NgayBatDau).toLocaleDateString('vi-VN') : '.../.../...'
+        const ngayKetThuc = currentContract?.NgayKetThuc ? new Date(currentContract.NgayKetThuc).toLocaleDateString('vi-VN') : '.../.../...'
+        const datCoc = (currentContract as any)?.TienDatCoc ? Number((currentContract as any).TienDatCoc).toLocaleString('vi-VN') : '........'
+        const chuKy = currentContract?.ChuKy || currentContract?.ThoiHanHopDong || ''
+        const cccdFront = (khachHang as any)?.CCCDMT || ''
+        const cccdBack = (khachHang as any)?.CCCDMS || ''
+        const parseTienIch = (val: any): string[] => {
+          if (Array.isArray(val)) return val
+          if (typeof val === 'string') {
+            try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed } catch {}
+            if (val.includes(',')) return val.split(',').map((s) => s.trim()).filter(Boolean)
+            if (val.trim()) return [val.trim()]
+          }
+          return []
+        }
+        const tienIchList = parseTienIch((phong as any)?.TienIch)
+        return (
+          <div id="bw-print" className="mx-auto px-8 py-10 bg-white text-black" style={{maxWidth: 900}}>
+            <div className="text-center mb-2">
+              <h1 className="text-2xl font-bold">HỢP ĐỒNG THUÊ PHÒNG TRỌ</h1>
+              <p className="text-sm">(Bản in đen trắng)</p>
+            </div>
+            <div className="mt-4 text-sm leading-6">
+              <p><strong>Bên A (Chủ trọ):</strong> {landlordName}</p>
+              <p><strong>CMND/CCCD:</strong> {landlordId}</p>
+              <p><strong>SĐT:</strong> {landlordPhone}</p>
+              <p><strong>Địa chỉ:</strong> {landlordAddr}</p>
+              <div className="h-2" />
+              <p><strong>Bên B (Khách thuê):</strong> {tenantName}</p>
+              <p><strong>CMND/CCCD:</strong> {tenantId}</p>
+              <p><strong>SĐT:</strong> {tenantPhone}</p>
+              <p><strong>Giới tính:</strong> {tenantGender}</p>
+              <p><strong>Ngày sinh:</strong> {tenantBirth}</p>
+              <p><strong>Địa chỉ:</strong> {tenantAddr}</p>
+              <div className="h-2" />
+              <p><strong>Phòng thuê:</strong> Dãy {dayPhong}, Phòng {soPhong}</p>
+              <p><strong>Giá phòng:</strong> {giaPhong} VND/tháng</p>
+              <p><strong>Diện tích:</strong> {dienTich} m²</p>
+              <p><strong>Tiền đặt cọc:</strong> {datCoc} VND</p>
+              <p><strong>Chu kỳ thu tiền:</strong> {chuKy || 'Theo thỏa thuận'}</p>
+              <p><strong>Thời hạn hợp đồng:</strong> {ngayBatDau} đến {ngayKetThuc}</p>
+              {tienIchList && tienIchList.length > 0 && (
+                <div className="mt-2">
+                  <p><strong>Tiện ích đi kèm:</strong></p>
+                  <ul className="list-disc pl-5">
+                    {tienIchList.map((t, idx) => (<li key={idx}>{t}</li>))}
+                  </ul>
+                </div>
+              )}
+
+              {(cccdFront || cccdBack) && (
+                <div className="mt-4">
+                  <p><strong>Ảnh CCCD của Bên B:</strong></p>
+                  <div className="grid grid-cols-2 gap-6 mt-2">
+                    <div>
+                      <p className="text-xs mb-1">Mặt trước</p>
+                      {cccdFront ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cccdFront} alt="CCCD Mặt trước" className="border border-black p-1 max-h-44 object-contain w-full" style={{filter: 'grayscale(100%)'}} />
+                      ) : (
+                        <div className="h-44 border border-black" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs mb-1">Mặt sau</p>
+                      {cccdBack ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cccdBack} alt="CCCD Mặt sau" className="border border-black p-1 max-h-44 object-contain w-full" style={{filter: 'grayscale(100%)'}} />
+                      ) : (
+                        <div className="h-44 border border-black" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <p><strong>Điều khoản chính:</strong></p>
+                <ol className="list-decimal pl-5">
+                  <li>Bên B thanh toán tiền phòng đúng hạn vào ngày 5 hàng tháng.</li>
+                  <li>Không cho thuê lại/chuyển nhượng khi chưa có sự đồng ý của Bên A.</li>
+                  <li>Giữ gìn tài sản, báo hư hỏng kịp thời.</li>
+                  <li>Bên A cung cấp dịch vụ điện, nước, internet theo thỏa thuận.</li>
+                  <li>Gia hạn/chấm dứt hợp đồng theo thỏa thuận hai bên.</li>
+                  <li>Khi chấm dứt, Bên B trả lại phòng trong tình trạng ban đầu.</li>
+                </ol>
+              </div>
+              <div className="mt-4">
+                <p><strong>Trách nhiệm & cam kết:</strong></p>
+                <ul className="list-disc pl-5">
+                  <li>Hai bên hỗ trợ, phối hợp thực hiện đúng các điều khoản hợp đồng.</li>
+                  <li>Báo trước 30 ngày nếu một trong hai bên muốn chấm dứt hợp đồng sớm.</li>
+                  <li>Tiền đặt cọc được hoàn trả theo thỏa thuận sau khi trừ các chi phí phát sinh hợp lý (nếu có).</li>
+                  <li>Hợp đồng có giá trị pháp lý; tranh chấp được giải quyết thông qua thương lượng, hòa giải hoặc cơ quan có thẩm quyền.</li>
+                </ul>
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-12">
+                <div className="text-center">
+                  <p><strong>ĐẠI DIỆN BÊN A</strong></p>
+                  <div className="mt-8 border border-black border-dashed h-24" />
+                  <p className="mt-2 text-xs">Ký, ghi rõ họ tên</p>
+                </div>
+                <div className="text-center">
+                  <p><strong>ĐẠI DIỆN BÊN B</strong></p>
+                  <div className="mt-8 border border-black border-dashed h-24" />
+                  <p className="mt-2 text-xs">Ký, ghi rõ họ tên</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Print styles: only show bw-print when printing */}
+      <style jsx global>{`
+        @media print {
+          body { background: #fff !important; }
+          #print-area { display: none !important; }
+          #bw-print { display: block !important; }
+          .screen-only { display: none !important; }
+          * { color: #000 !important; box-shadow: none !important; text-shadow: none !important; }
+        }
+        @media screen {
+          #bw-print { display: none; }
+        }
+      `}</style>
     </div>
   )
 }
