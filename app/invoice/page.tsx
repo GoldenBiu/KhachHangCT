@@ -160,10 +160,13 @@ export default function InvoicePage() {
                   .filter(i => filterMonth ? String(i.ThangNam).includes(filterMonth) : true)
                   .filter(i => filterRoom ? String(i.SoPhong||'').includes(filterRoom) : true)
                   .map((invoice) => {
+                  const paid = toNum((invoice as any).TienTra ?? (invoice as any).Tientra) || 0
+                  const totalInv = toNum((invoice as any).TongTien) || 0
                   const isPaid = (
                     isPaidStatus((invoice as any).TrangThaiThanhToan) ||
-                    toNum((invoice as any).TienTra ?? (invoice as any).Tientra) >= toNum((invoice as any).TongTien)
+                    (totalInv > 0 && paid >= totalInv)
                   )
+                  const isPartial = !isPaid && paid > 0
                   const dien = toNum(invoice.SoDienDaTieuThu) * toNum(invoice.GiaDienMoi)
                   const nuoc = toNum(invoice.SoNuocDaTieuThu) * toNum(invoice.GiaNuocMoi)
                   const totalRow = toNum(invoice.TienPhong) + dien + nuoc + toNum(invoice.PhiSuaChua) - toNum(invoice.PhiTru)
@@ -211,8 +214,8 @@ export default function InvoicePage() {
                           <Eye className="h-4 w-4 mr-1" />
                           Xem chi tiết
                         </Button>
-                        <div className={`px-2 py-1 rounded text-xs font-medium ${isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                          {isPaid ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                        <div className={`px-2 py-1 rounded text-xs font-medium ${isPaid ? 'bg-green-100 text-green-800' : isPartial ? 'bg-amber-100 text-amber-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                          {isPaid ? 'Đã thanh toán' : isPartial ? 'Thanh toán còn nợ' : 'Chưa thanh toán'}
                         </div>
                       </div>
                     </div>
@@ -420,8 +423,12 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
       toast.error('Không có dữ liệu hóa đơn để thanh toán')
       return
     }
+    const total = toVnd((chiTietHoaDon as any)?.tongCong ?? (chiTietHoaDon as any)?.TongCong ?? (chiTietHoaDon as any)?.TongTien) ?? 0
+    const paid = toVnd((chiTietHoaDon as any)?.tienTra ?? (chiTietHoaDon as any)?.TienTra) ?? 0
+    const remaining = Math.max(0, total - paid)
+    const amountToPay = remaining > 0 ? remaining : total
     if (selectedMethod === 'momo') {
-      await handleMomoPayment(chiTietHoaDon.tongCong)
+      await handleMomoPayment(amountToPay)
     } else {
       toast.error('Phương thức thanh toán chưa được hỗ trợ')
     }
@@ -655,9 +662,12 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
 
   const paidAmount = Math.max(detailPaid, recordPaid)
   const totalAmount = detailTotal || recordTotal
-  const alreadyPaid = (totalAmount > 0 && paidAmount >= totalAmount) || (record ? isPaidRecord(record as any) : false)
+  const alreadyPaid = totalAmount > 0
+    ? paidAmount >= totalAmount
+    : (record ? isPaidRecord(record as any) : false)
   const debtAmount = Math.max(0, totalAmount - paidAmount)
-  const displayStatus = alreadyPaid ? 'Đã thanh toán' : 'Chưa thanh toán'
+  const isPartialPaid = !alreadyPaid && paidAmount > 0 && debtAmount > 0
+  const displayStatus = alreadyPaid ? 'Đã thanh toán' : isPartialPaid ? 'Thanh toán còn nợ' : 'Chưa thanh toán'
 
   const feeItems = [
     { label: 'Tiền phòng', amount: chiTietHoaDon.tienPhong },
@@ -743,7 +753,7 @@ function InvoiceDetail({ chiSoID }: { chiSoID: string }) {
             <div>
               <p className="text-gray-600">Trạng thái: 
                 <span className={`font-semibold ml-1 ${
-                  alreadyPaid ? 'text-green-600' : 'text-yellow-600'
+                  alreadyPaid ? 'text-green-600' : isPartialPaid ? 'text-amber-600' : 'text-yellow-600'
                 }`}>
                   {displayStatus}
                 </span>

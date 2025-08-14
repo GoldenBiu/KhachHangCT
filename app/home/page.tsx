@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { User, FileText, Receipt, MessageCircle, LogOut, Home, Mail, Phone, Sun, Moon, Calendar, CheckCircle2, Clock, AlertCircle, TrendingUp, TrendingDown, Cloud, Thermometer, Droplets, Wind, Gauge } from 'lucide-react'
+import { User, FileText, Receipt, MessageCircle, LogOut, Home, Mail, Phone, Sun, Moon, Calendar, CheckCircle2, Clock, AlertCircle, TrendingUp, TrendingDown, Cloud, Thermometer, Droplets, Wind, Gauge, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
@@ -62,6 +62,8 @@ export default function HomePage() {
   const { hopDong } = useHopDong()
   const { records: payRecords, summary: paySummary, loading: payLoading, error: payError, refresh: refreshPay } = useLichSuThanhToan()
   const { currentTheme, changeTheme, getThemeClasses } = useTheme()
+  const [showUserCard, setShowUserCard] = useState(true)
+  const [showWeatherCard, setShowWeatherCard] = useState(true)
 
   useEffect(() => {
     const token = localStorage.getItem('userToken')
@@ -80,6 +82,33 @@ export default function HomePage() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Load dismissed cards state
+  useEffect(() => {
+    try {
+      const hideUser = localStorage.getItem('hide_user_card') === '1'
+      const hideWeather = localStorage.getItem('hide_weather_card') === '1'
+      if (hideUser) setShowUserCard(false)
+      if (hideWeather) setShowWeatherCard(false)
+    } catch {}
+  }, [])
+
+  const dismissUserCard = () => {
+    setShowUserCard(false)
+    try { localStorage.setItem('hide_user_card', '1') } catch {}
+  }
+  const dismissWeatherCard = () => {
+    setShowWeatherCard(false)
+    try { localStorage.setItem('hide_weather_card', '1') } catch {}
+  }
+  const restoreUserCard = () => {
+    setShowUserCard(true)
+    try { localStorage.removeItem('hide_user_card') } catch {}
+  }
+  const restoreWeatherCard = () => {
+    setShowWeatherCard(true)
+    try { localStorage.removeItem('hide_weather_card') } catch {}
+  }
 
   // Onboarding minimal (3 steps, first visit)
   useEffect(() => {
@@ -190,11 +219,33 @@ export default function HomePage() {
     try {
       setWeatherLoading(true)
       setWeatherError(null)
-      const response = await fetch('https://all-oqry.onrender.com/api/thoitiet/can-tho')
+      // Bust caches aggressively and avoid stale values
+      const url = `https://all-oqry.onrender.com/api/thoitiet/can-tho?t=${Date.now()}`
+      const response = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
       if (!response.ok) {
         throw new Error('Không thể lấy dữ liệu thời tiết')
       }
-      const data = await response.json()
+      let data = await response.json()
+
+      // Cross-check with Open-Meteo for real-time precipitation; if raining, reflect it
+      try {
+        const omUrl = 'https://api.open-meteo.com/v1/forecast?latitude=10.0452&longitude=105.7469&current=temperature_2m,relative_humidity_2m,precipitation,rain,showers,cloud_cover,wind_speed_10m,pressure_msl'
+        const omRes = await fetch(omUrl, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+        const om = await omRes.json()
+        const rainNow = Number(om?.current?.rain ?? 0) + Number(om?.current?.showers ?? 0)
+        const precipitation = Number(om?.current?.precipitation ?? 0)
+        const isRaining = (rainNow > 0.02) || (precipitation > 0.02)
+        if (isRaining) {
+          const lower = String(data?.thoi_tiet || '').toLowerCase()
+          const alreadyRainy = lower.includes('mưa') || lower.includes('rain') || lower.includes('shower')
+          if (!alreadyRainy) {
+            data = { ...data, thoi_tiet: 'Mưa rải rác' }
+          }
+        }
+      } catch {
+        // ignore fallback errors; keep primary data
+      }
+
       setWeatherData(data)
     } catch (error) {
       console.error('Lỗi thời tiết:', error)
@@ -211,28 +262,57 @@ export default function HomePage() {
     const humidity = parseInt(weatherData.do_am.replace('%', ''))
     const windSpeed = parseFloat(weatherData.toc_do_gio.replace(' m/s', ''))
     const weatherDesc = weatherData.thoi_tiet.toLowerCase()
-    
-    // Temperature-based suggestions
+
+    // Determine day vs night to tailor advice
+    const hour = new Date().getHours()
+    const isNight = hour < 6 || hour >= 20
+
+    // Friendly greeting to reduce monotony; will be kept as the first suggestion
+    if (isNight) {
+      suggestions.push('🌙 Đêm khuya rồi, hãy ngủ sớm để giữ sức khỏe. Chúc bạn ngủ ngon!')
+    } else if (hour >= 5 && hour < 12) {
+      suggestions.push('🌅 Chào buổi sáng! Chúc bạn một ngày mới tốt lành và tràn đầy năng lượng!')
+    } else if (hour >= 12 && hour < 18) {
+      suggestions.push('🌤️ Chúc buổi chiều nhẹ nhàng, nhớ nghỉ mắt và uống nước!')
+    } else {
+      suggestions.push('🌆 Buổi tối thư giãn, dành thời gian cho gia đình và bản thân nhé!')
+    }
+
+    // Temperature-based suggestions (day/night aware)
     if (temp < 18) {
-      suggestions.push('🌡️ Trời lạnh, nhớ mặc ấm và uống trà nóng nhé!')
+      suggestions.push(isNight
+        ? '🌡️ Trời lạnh về đêm, giữ ấm khi ngủ và hạn chế ra ngoài!'
+        : '🌡️ Trời lạnh, nhớ mặc ấm và uống trà nóng nhé!')
     } else if (temp < 22) {
-      suggestions.push('🧥 Trời mát, nên mặc áo khoác nhẹ!')
+      suggestions.push(isNight
+        ? '🧥 Trời mát về đêm, nếu cần ra ngoài nhớ mặc ấm!'
+        : '🧥 Trời mát, nên mặc áo khoác nhẹ!')
     } else if (temp >= 22 && temp <= 28) {
-      suggestions.push('☀️ Thời tiết dễ chịu, thích hợp để ra ngoài và hoạt động!')
+      if (isNight) {
+        suggestions.push('😴 Thời tiết dễ chịu. Hiện là ban đêm, ưu tiên nghỉ ngơi; nếu cần, vận động nhẹ trong nhà!')
+      } else {
+        suggestions.push('☀️ Thời tiết dễ chịu, thích hợp để ra ngoài và hoạt động!')
+      }
     } else if (temp > 28 && temp <= 32) {
-      suggestions.push('🌤️ Trời ấm, thích hợp để đi dạo buổi chiều!')
+      if (isNight) {
+        suggestions.push('🌤️ Trời ấm. Ban đêm nên hạn chế hoạt động ngoài trời, uống đủ nước và nghỉ ngơi!')
+      } else {
+        suggestions.push('🌤️ Trời ấm, thích hợp để đi dạo buổi chiều!')
+      }
     } else if (temp > 32) {
       suggestions.push('🔥 Trời nóng, hãy uống nhiều nước và tránh ra ngoài giữa trưa!')
     }
-    
-    // Weather condition-based suggestions
+
+    // Weather condition-based suggestions (day/night aware)
     if (weatherDesc.includes('mưa') || weatherDesc.includes('drizzle') || weatherDesc.includes('rain') || weatherDesc.includes('shower')) {
       suggestions.push('☔ Trời đang mưa, nhớ mang theo ô và áo mưa nhé!')
       suggestions.push('🚗 Đường trơn trượt, lái xe cẩn thận!')
       suggestions.push('🏠 Nên ở trong nhà hoặc tìm nơi trú mưa!')
-    } else if (weatherDesc.includes('nắng') || weatherDesc.includes('clear') || weatherDesc.includes('sunny') || weatherDesc.includes('fair')) {
+    } else if (weatherDesc.includes('nắng') || weatherDesc.includes('sunny') || weatherDesc.includes('fair') || (weatherDesc.includes('clear') && !isNight)) {
       suggestions.push('🕶️ Trời nắng đẹp, nhớ đeo kính râm và bôi kem chống nắng!')
       suggestions.push('🌴 Thích hợp để đi picnic hoặc hoạt động ngoài trời!')
+    } else if (weatherDesc.includes('clear') && isNight) {
+      suggestions.push('🌙 Trời quang đãng. Ban đêm nên nghỉ ngơi; nếu ra ngoài, chú ý an toàn!')
     } else if (weatherDesc.includes('mây') || weatherDesc.includes('cloud')) {
       if (weatherDesc.includes('u ám') || weatherDesc.includes('overcast') || weatherDesc.includes('scattered')) {
         suggestions.push('☁️ Trời âm u, có thể sẽ mưa, nhớ mang theo ô!')
@@ -266,20 +346,37 @@ export default function HomePage() {
       suggestions.push('🌿 Nên dùng máy tạo ẩm trong nhà!')
     }
     
-    // Time-based suggestions
-    const hour = new Date().getHours()
-    if (hour >= 5 && hour <= 8) {
+    // Add a pool of varied, time-appropriate tips to reduce repetition
+    const commonDayTips = [
+      '🚶‍♂️ Đi bộ 5–10 phút để khởi động cơ thể!',
+      '💧 Uống một ly nước để bổ sung năng lượng!',
+      '🧠 Lên danh sách 3 việc quan trọng nhất hôm nay!',
+      '🕶️ Nếu nắng mạnh, nhớ đội nón/khoác nhẹ khi ra ngoài!',
+      '🌿 Mở cửa sổ vài phút để thoáng khí!',
+    ]
+    const commonNightTips = [
+      '📵 Giảm ánh sáng xanh 30 phút trước khi ngủ!',
+      '🛌 Hít thở sâu 1 phút rồi đi ngủ sớm nhé!',
+      '🕰️ Đặt báo thức hợp lý cho ngày mai!',
+      '💧 Uống một ngụm nước ấm trước khi ngủ!',
+      '🧘‍♂️ Thả lỏng cơ thể, kéo giãn nhẹ 2–3 phút!',
+    ]
+    const varietyPool = isNight ? commonNightTips : commonDayTips
+    varietyPool.forEach((tip) => suggestions.push(tip))
+    
+    // Time-based suggestions (use the same hour computed above)
+    if (hour >= 5 && hour < 8) {
       suggestions.push('🌅 Buổi sáng sớm, thích hợp để tập thể dục và hít thở không khí trong lành!')
-    } else if (hour >= 8 && hour <= 11) {
+    } else if (hour >= 8 && hour < 11) {
       suggestions.push('☀️ Buổi sáng đẹp trời, thích hợp để đi làm hoặc học tập!')
-    } else if (hour >= 11 && hour <= 14) {
+    } else if (hour >= 11 && hour < 14) {
       suggestions.push('🌞 Giữa trưa, nên tránh ra ngoài nếu trời nắng gắt!')
-    } else if (hour >= 14 && hour <= 17) {
+    } else if (hour >= 14 && hour < 17) {
       suggestions.push('🌤️ Buổi chiều, thích hợp để đi dạo và thư giãn!')
-    } else if (hour >= 17 && hour <= 20) {
+    } else if (hour >= 17 && hour < 20) {
       suggestions.push('🌆 Chiều tối mát mẻ, thích hợp để đi dạo hoặc tập thể dục!')
-    } else if (hour >= 20 || hour <= 5) {
-      suggestions.push('🌙 Buổi tối, nên nghỉ ngơi và chuẩn bị cho ngày mai!')
+    } else {
+      suggestions.push('🌙 Đang là ban đêm, hãy ưu tiên nghỉ ngơi và ngủ đủ giấc!')
     }
     
     // Special combinations
@@ -305,15 +402,19 @@ export default function HomePage() {
       suggestions.push('📈 Áp suất cao, thời tiết ổn định, thích hợp để lên kế hoạch!')
     }
     
-    // Loại bỏ các gợi ý trùng lặp và giới hạn 4 gợi ý
+    // Loại bỏ trùng lặp và lấy ngẫu nhiên, luôn giữ lời chào đầu tiên
     const uniqueSuggestions = [...new Set(suggestions)]
-    return uniqueSuggestions.slice(0, 4)
+    const [firstSuggestion, ...restSuggestions] = uniqueSuggestions
+    const shuffled = restSuggestions.sort(() => Math.random() - 0.5)
+    const MAX_SUGGESTIONS = 6
+    if (!firstSuggestion) return shuffled.slice(0, MAX_SUGGESTIONS)
+    return [firstSuggestion, ...shuffled.slice(0, MAX_SUGGESTIONS - 1)]
   }, [])
 
   useEffect(() => {
     fetchWeather()
-    // Cập nhật thời tiết mỗi 30 phút
-    const interval = setInterval(fetchWeather, 30 * 60 * 1000)
+    // Cập nhật thời tiết mỗi 10 phút để sát hơn với hiện trạng
+    const interval = setInterval(fetchWeather, 10 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -379,12 +480,32 @@ export default function HomePage() {
 
 
 
+        {/* Hidden notices to restore cards when dismissed */}
+        {(!showUserCard || !showWeatherCard) && (
+          <div className="mb-4 text-xs text-gray-600 dark:text-gray-300 flex items-center gap-3 flex-wrap">
+            {!showUserCard && (
+              <button className="underline hover:opacity-80" onClick={restoreUserCard}>
+                Hiện lại thẻ người dùng
+              </button>
+            )}
+            {!showWeatherCard && (
+              <button className="underline hover:opacity-80" onClick={restoreWeatherCard}>
+                Hiện lại thẻ thời tiết
+              </button>
+            )}
+          </div>
+        )}
+
         {/* User Info Card */}
+        {showUserCard && (
         <Card className="mb-8 border-0 shadow-lg relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-600">
           <CardContent className="p-6 text-white">
             <div className="pointer-events-none absolute -top-10 -left-8 h-40 w-40 bg-white/20 blur-3xl rounded-full" />
             <div className="pointer-events-none absolute -bottom-12 -right-10 h-48 w-48 bg-white/10 blur-3xl rounded-full" />
             <div className="relative flex items-center gap-6">
+              <button aria-label="Đóng thẻ người dùng" onClick={dismissUserCard} className="absolute top-0 right-0 m-2 p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white">
+                <X className="h-4 w-4" />
+              </button>
               <div className="relative group">
                 <div className="absolute -inset-1 rounded-full bg-white/30 blur-xl opacity-40 group-hover:opacity-60 transition" />
                 <div className="absolute -inset-2 rounded-full bg-gradient-to-tr from-pink-300/40 to-cyan-300/40 blur-2xl opacity-40 group-hover:opacity-70 transition" />
@@ -455,25 +576,30 @@ export default function HomePage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        {/* Weather Card */}
-        <Card className="mb-8 border-0 shadow-lg relative overflow-hidden bg-gradient-to-br from-sky-500 to-blue-600">
-          <CardContent className="p-6 text-white">
-            <div className="pointer-events-none absolute -top-10 -right-8 h-40 w-40 bg-white/20 blur-3xl rounded-full" />
-            <div className="pointer-events-none absolute -bottom-12 -left-10 h-48 w-48 bg-white/10 blur-3xl rounded-full" />
+        {/* Weather Card (compact) */}
+        {showWeatherCard && (
+        <Card className="mb-6 border-0 shadow-lg relative overflow-hidden bg-gradient-to-br from-sky-500 to-blue-600">
+          <CardContent className="p-4 sm:p-5 text-white">
+            <div className="pointer-events-none absolute -top-8 -right-8 h-28 w-28 bg-white/20 blur-3xl rounded-full" />
+            <div className="pointer-events-none absolute -bottom-10 -left-10 h-36 w-36 bg-white/10 blur-3xl rounded-full" />
             <div className="relative flex items-center justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <Cloud className="h-5 w-5 text-white/80" />
-                  <h3 className="text-lg font-semibold">Thời tiết Cần Thơ</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <Cloud className="h-4 w-4 text-white/80" />
+                  <h3 className="text-base font-semibold">Thời tiết Cần Thơ</h3>
                 </div>
+                <button aria-label="Đóng thẻ thời tiết" onClick={dismissWeatherCard} className="absolute top-0 right-0 m-2 p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white">
+                  <X className="h-4 w-4" />
+                </button>
                 
                 {weatherLoading ? (
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full animate-pulse" />
+                    <div className="w-9 h-9 bg-white/20 rounded-full animate-pulse" />
                     <div className="space-y-2">
-                      <div className="h-4 bg-white/20 rounded animate-pulse w-24" />
-                      <div className="h-3 bg-white/20 rounded animate-pulse w-32" />
+                      <div className="h-3 bg-white/20 rounded animate-pulse w-20" />
+                      <div className="h-2.5 bg-white/20 rounded animate-pulse w-28" />
                     </div>
                   </div>
                 ) : weatherError ? (
@@ -492,69 +618,69 @@ export default function HomePage() {
                     </div>
                   </div>
                 ) : weatherData ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-3">
                         <img 
                           src={weatherData.bieu_tuong} 
                           alt={weatherData.thoi_tiet}
-                          className="w-16 h-16"
+                          className="w-12 h-12"
                         />
                         <div>
-                          <p className="text-2xl font-bold">{weatherData.nhiet_do}</p>
-                          <p className="text-white/90 capitalize">{weatherData.thoi_tiet}</p>
+                          <p className="text-xl font-bold">{weatherData.nhiet_do}</p>
+                          <p className="text-white/90 capitalize text-sm">{weatherData.thoi_tiet}</p>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="flex items-center gap-2 text-white/90">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="flex items-center gap-1.5 text-white/90">
                         <Thermometer className="h-4 w-4" />
-                        <span className="text-sm">Nhiệt độ</span>
+                        <span className="text-xs">Nhiệt độ</span>
                         <span className="font-medium">{weatherData.nhiet_do}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-white/90">
+                      <div className="flex items-center gap-1.5 text-white/90">
                         <Droplets className="h-4 w-4" />
-                        <span className="text-sm">Độ ẩm</span>
+                        <span className="text-xs">Độ ẩm</span>
                         <span className="font-medium">{weatherData.do_am}</span>
                     </div>
-                      <div className="flex items-center gap-2 text-white/90">
+                      <div className="flex items-center gap-1.5 text-white/90">
                         <Wind className="h-4 w-4" />
-                        <span className="text-sm">Gió</span>
+                        <span className="text-xs">Gió</span>
                         <span className="font-medium">{weatherData.toc_do_gio}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-white/90">
+                      <div className="flex items-center gap-1.5 text-white/90">
                         <Gauge className="h-4 w-4" />
-                        <span className="text-sm">Áp suất</span>
+                        <span className="text-xs">Áp suất</span>
                         <span className="font-medium">{weatherData.ap_suat}</span>
                       </div>
                     </div>
                     
                     {/* Weather Suggestions */}
                     {weatherData && (
-                      <div className="mt-4 p-3 bg-white/10 rounded-lg border border-white/20 backdrop-blur-sm">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-sm font-medium text-white/90">💡 Gợi ý thông minh:</span>
+                      <div className="mt-3 p-2 bg-white/10 rounded-lg border border-white/20 backdrop-blur-sm">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-medium text-white/90">💡 Gợi ý thông minh:</span>
                           <div className="flex-1 h-px bg-white/20"></div>
                         </div>
-                        <div className="space-y-2.5">
+                        <div className="space-y-2">
                           {getWeatherSuggestions(weatherData).map((suggestion: string, index: number) => (
-                            <div key={`weather-suggestion-${index}-${suggestion.length}`} className="flex items-start gap-3 text-sm group hover:bg-white/5 p-2 rounded-md transition-colors">
-                              <span className="text-white/70 mt-0.5 text-xs">#{index + 1}</span>
+                            <div key={`weather-suggestion-${index}-${suggestion.length}`} className="flex items-start gap-2 text-xs group hover:bg-white/5 p-1.5 rounded-md transition-colors">
+                              <span className="text-white/70 mt-0.5 text-[10px]">#{index + 1}</span>
                               <span className="text-white/90 leading-relaxed flex-1">{suggestion}</span>
                             </div>
                           ))}
                         </div>
-                        <div className="mt-3 pt-2 border-t border-white/20">
-                          <p className="text-xs text-white/70 text-center">
+                        <div className="mt-2 pt-2 border-t border-white/20">
+                          <p className="text-[10px] text-white/70 text-center">
                             💭 Gợi ý được cập nhật theo thời tiết thực tế
                           </p>
                         </div>
                       </div>
                     )}
                     
-                    <div className="flex items-center justify-between pt-2 border-t border-white/20">
-                      <p className="text-sm text-white/80">
+                    <div className="flex items-center justify-between pt-1.5 border-t border-white/20">
+                      <p className="text-xs text-white/80">
                         Cập nhật lúc {new Date().toLocaleTimeString('vi-VN', { 
                           hour: '2-digit', 
                           minute: '2-digit' 
@@ -575,6 +701,7 @@ export default function HomePage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

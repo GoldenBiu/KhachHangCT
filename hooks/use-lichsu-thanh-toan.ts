@@ -168,13 +168,18 @@ export function useLichSuThanhToan() {
         // ignore summary API failures; fallback below
       }
 
-      // Fallback tính toán từ danh sách nếu API tổng hợp không có
-      const tongNo = (typeof tongNoFromApi === 'number'
-        ? tongNoFromApi
-        : (toVnd(shape?.tong_no) ?? normalized.reduce((sum, r) => sum + (r.TienNo ?? 0), 0)))
-      const tongDaTT = (typeof tongDaTTFromApi === 'number'
-        ? tongDaTTFromApi
-        : (toVnd(shape?.tong_da_thanh_toan) ?? normalized.reduce((s, r) => s + (r.Tientra ?? r.TienTra ?? 0), 0)))
+      // Tính toán chắc chắn từ danh sách để tránh số tổng hợp bị trễ
+      const computed = computeTotalsFromRecords(normalized)
+
+      // Hòa giải với API tổng hợp nếu có:
+      // - Nợ: lấy giá trị THẤP HƠN để không giữ số nợ cũ sau khi đã trả
+      // - Đã thanh toán: lấy giá trị CAO HƠN để không bỏ sót khoản vừa thanh toán
+      const tongNo = typeof tongNoFromApi === 'number'
+        ? Math.min(tongNoFromApi, computed.tongNo)
+        : (toVnd(shape?.tong_no) ?? computed.tongNo)
+      const tongDaTT = typeof tongDaTTFromApi === 'number'
+        ? Math.max(tongDaTTFromApi, computed.tongDaThanhToan)
+        : (toVnd(shape?.tong_da_thanh_toan) ?? computed.tongDaThanhToan)
       const tongTongTien = normalized.reduce((s, r) => s + (r.TongTien ?? 0), 0)
       setSummary({ soLanThanhToan: soLan, tongNo, tongDaThanhToan: tongDaTT, tongTongTien })
     } catch (err) {
@@ -253,5 +258,31 @@ export function isPaidRecord(r: LichSuThanhToanRecord): boolean {
   const total = toVnd(r.TongTien) ?? 0
   const byAmount = total > 0 && paid >= total
   return byStatus || byAmount
+}
+
+// Tính tổng chắc chắn dựa trên danh sách hóa đơn
+function computeTotalsFromRecords(list: LichSuThanhToanRecord[]) {
+  let tongNo = 0
+  let tongDaThanhToan = 0
+
+  for (const r of list) {
+    const total = toVnd(r.TongTien) ?? 0
+    const paid = toVnd(r.TienTra ?? r.Tientra) ?? 0
+    const explicitDebt = toVnd(r.TienNo)
+
+    if (isPaidRecord(r)) {
+      // Nếu đã thanh toán: cộng đúng tổng tiền hóa đơn (hoặc số đã trả nếu không có tổng)
+      tongDaThanhToan += total > 0 ? total : paid
+    } else {
+      if (typeof explicitDebt === 'number') {
+        tongNo += explicitDebt
+      } else {
+        const missing = Math.max(0, total - paid)
+        tongNo += missing
+      }
+    }
+  }
+
+  return { tongNo, tongDaThanhToan }
 }
 

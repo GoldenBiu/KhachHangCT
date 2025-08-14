@@ -130,7 +130,12 @@ export default function PaymentHistoryPage() {
             ) : (
                <div className="divide-y divide-gray-200 dark:divide-gray-800">
                 {records.map((r, idx) => {
-                  const isPaid = isPaidRecord(r as any)
+                  const paid = Number(r.TienTra ?? r.Tientra ?? 0)
+                  const total = Number(r.TongTien ?? 0)
+                  // Amount-based truth first. If total is known, trust amounts; else fallback to status helper
+                  const isPaidAmount = total > 0 && paid >= total
+                  const isPaid = total > 0 ? isPaidAmount : isPaidRecord(r as any)
+                  const isPartial = !isPaid && paid > 0 && total > paid
                   const tong = Number(r.TongTien ?? 0).toLocaleString('vi-VN')
                   const thang = r.ThangNam
                   const dien = Number(r.TienDien ?? r.SoDienDaTieuThu ?? 0).toLocaleString('vi-VN')
@@ -149,7 +154,7 @@ export default function PaymentHistoryPage() {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-gray-900 dark:text-gray-100">{tong} VND</p>
-                        <p className={`text-sm ${isPaid ? 'text-emerald-600' : 'text-yellow-600'}`}>{isPaid ? 'Đã thanh toán' : 'Chưa thanh toán'}</p>
+                        <p className={`text-sm ${isPaid ? 'text-emerald-600' : isPartial ? 'text-amber-600' : 'text-yellow-600'}`}>{isPaid ? 'Đã thanh toán' : isPartial ? 'Thanh toán còn nợ' : 'Chưa thanh toán'}</p>
                         {isPaid ? (
                           <Button
                             variant="outline"
@@ -165,7 +170,7 @@ export default function PaymentHistoryPage() {
                             className={`mt-2 ${solidClassesByColor[actionColor]}`}
                             onClick={() => router.push(`/invoice?thang=${encodeURIComponent(thang)}&phong=${encodeURIComponent(r.SoPhong || '')}`)}
                           >
-                            Bấm để thanh toán
+                            {isPartial ? 'Tiếp tục thanh toán' : 'Bấm để thanh toán'}
                           </Button>
                         )}
                       </div>
